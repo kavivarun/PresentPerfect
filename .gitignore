@@ -9,6 +9,7 @@ __pycache__/
 YOLO_format/
 runs/
 *.mp4
+*.zip
 
 # Distribution / packaging
 .Python
