@@ -7,6 +7,7 @@ import { ReactComponent as CheckBox } from '../assets/checkbox.svg';
 import { ReactComponent as UploadFile } from '../assets/uploadfile.svg';
 import { ReactComponent as DropVideo } from '../assets/videodrop.svg';
 import { io } from 'socket.io-client';
+import { useAuth } from '../context/AuthContext';
 
 export default function UploadPage() {
   const navigate = useNavigate();
@@ -25,6 +26,13 @@ export default function UploadPage() {
 
   const [uploading, setUploading] = useState(false);
   const [uploadProgress, setUploadProgress] = useState(0);
+  const [reportData, setReportData] = useState(null);
+
+  const { user, login } = useAuth();
+  const [pendingNavigate, setPendingNavigate] = useState(false);
+  const [emailInput, setEmailInput] = useState('');
+  const [passwordInput, setPasswordInput] = useState('');
+  const [loginError, setLoginError] = useState('');
 
   /* ------------------------------------------------------------------ */
   /*  SOCKET‑IO SUBSCRIPTION  */
@@ -33,21 +41,34 @@ export default function UploadPage() {
     socketRef.current = io('http://localhost:4000');
 
     socketRef.current.on('processing-update', data => {
-        console.log(data)
       setProcessingProgress(data.progress);
       setProcessingMsg(data.message);
     });
 
     socketRef.current.on('processing-complete', data => {
       setProcessingProgress(100);
+      console.log(data)
       setProcessingMsg(data.message);
+      setReportData(data.data);
       setProcessing(false);
-      // 👉 navigate to results page if you have one
-      // navigate('/report');
+      if (user) {
+        navigate('/report', { state: { reportData: data.data } });
+      } else {
+        setPendingNavigate(true);
+      }
     });
 
     return () => socketRef.current.disconnect();
-  }, [navigate]);
+  }, [navigate, user, reportData]);
+
+  /* ------------------------------------------------------------------ */
+  /*  NAVIGATE AFTER LOGIN  */
+  /* ------------------------------------------------------------------ */
+  useEffect(() => {
+    if (user && pendingNavigate && reportData) {
+      navigate('/report', { state: { reportData } });
+    }
+  }, [user, pendingNavigate, reportData, navigate]);
 
   /* ------------------------------------------------------------------ */
   /*  TOAST  */
@@ -57,8 +78,20 @@ export default function UploadPage() {
     setToastVisible(true);
     setTimeout(() => {
       setToastVisible(false);
-      setTimeout(() => setToast(null), 400); // matches exit animation
+      setTimeout(() => setToast(null), 400);
     }, 3000);
+  };
+
+  /* ------------------------------------------------------------------ */
+  /*  INLINE LOGIN HANDLER  */
+  /* ------------------------------------------------------------------ */
+  const handleInlineLogin = e => {
+    e.preventDefault();
+    if (login(emailInput, passwordInput)) {
+      setLoginError('');
+    } else {
+      setLoginError('Invalid credentials.');
+    }
   };
 
   /* ------------------------------------------------------------------ */
@@ -84,7 +117,6 @@ export default function UploadPage() {
           setUploadProgress(pct);
         }
       });
-      // file sent – switch to processing mode
       setUploading(false);
       setProcessing(true);
       setProcessingProgress(0);
@@ -94,7 +126,7 @@ export default function UploadPage() {
       showToast('Upload failed');
       setUploading(false);
     }
-  }, [navigate]);
+  }, []);
 
   const { getRootProps, getInputProps, isDragActive, open } = useDropzone({
     onDrop,
@@ -283,6 +315,64 @@ export default function UploadPage() {
       fontSize: '1rem',
       animation: `${toastVisible ? 'fadeSlideIn' : 'fadeSlideOut'} 0.4s forwards`,
       pointerEvents: 'none'
+    },
+    loginOverlay: {
+      position: 'absolute',
+      top: 0,
+      left: 0,
+      width: '95.5%',
+      height: '79%',
+      backgroundColor: 'rgba(255, 255, 255, 0.29)',
+      borderRadius: '1.5rem',  // match the upload box corners
+      display: 'flex',
+      alignItems: 'center',
+      justifyContent: 'center',
+      padding: '2rem',
+      zIndex: 5
+    },
+    loginCard: {
+      backgroundColor: '#f9f9ff',
+      padding: '2rem',
+      borderRadius: '1.25rem',
+      boxShadow: '0 4px 12px rgba(0,0,0,0.2)',
+      width: '100%',
+      height:'90%',
+      maxWidth: '350px',
+      textAlign: 'left',
+    },
+    loginTitle: {
+      fontSize: '1.5rem',
+      color: '#5D2E8C',
+      marginBottom: '1rem'
+    },
+    loginInput: {
+      width: '100%',
+      padding: '0.7rem',
+      marginBottom: '1rem',
+      borderRadius: '0.75rem',
+      border: '1px solid #ccc',
+      fontSize: '1rem',
+      outline: 'none',
+      boxSizing: 'border-box'
+    },
+    loginButton: {
+      width: '100%',
+      padding: '0.8rem',
+      fontSize: '1rem',
+      borderRadius: '1rem',
+      border: 'none',
+      cursor: 'pointer',
+      backgroundColor: '#5D2E8C',
+      color: 'white',
+      transition: 'background 0.3s ease-in-out'
+    },
+    loginButtonHover: {
+      backgroundColor: '#B288C0'
+    },
+    loginError: {
+      color: 'red',
+      marginBottom: '1rem',
+      fontWeight: '500'
     }
   };
 
@@ -294,7 +384,6 @@ export default function UploadPage() {
 
   return (
     <div style={styles.page}>
-
       <h1 style={styles.heading}>Analyse Yourself</h1>
 
       <div {...getRootProps()} style={styles.uploadBox}>
@@ -310,19 +399,12 @@ export default function UploadPage() {
           </div>
         )}
 
-        {(processing) && (
+        {processing && (
           <div style={styles.progressOverlay}>
             <p style={styles.progressMessage}>{activeMessage}</p>
-
             <div style={styles.progressWrapper}>
-              <div
-                style={{
-                  ...styles.progressBar,
-                  width: `${activeProgress}%`
-                }}
-              />
+              <div style={{ ...styles.progressBar, width: `${activeProgress}%` }} />
             </div>
-
             <p style={styles.progressPercent}>{activeProgress}%</p>
           </div>
         )}
@@ -339,6 +421,42 @@ export default function UploadPage() {
             </button>
           </div>
         )}
+
+        {/* INLINE LOGIN PROMPT */}
+        {pendingNavigate && !user && (
+  <div style={styles.loginOverlay}>
+    <div style={styles.loginCard}>
+      <h2 style={styles.loginTitle}>Please log in to see your analysis</h2>
+      {loginError && <div style={styles.loginError}>{loginError}</div>}
+      <form onSubmit={handleInlineLogin}>
+        <input
+          type="email"
+          placeholder="Email"
+          value={emailInput}
+          onChange={e => setEmailInput(e.target.value)}
+          style={styles.loginInput}
+          required
+        />
+        <input
+          type="password"
+          placeholder="Password"
+          value={passwordInput}
+          onChange={e => setPasswordInput(e.target.value)}
+          style={styles.loginInput}
+          required
+        />
+        <button
+          type="submit"
+          style={styles.loginButton}
+          onMouseOver={e => (e.currentTarget.style.backgroundColor = styles.loginButtonHover.backgroundColor)}
+          onMouseOut={e => (e.currentTarget.style.backgroundColor = styles.loginButton.backgroundColor)}
+        >
+          Log In
+        </button>
+      </form>
+    </div>
+  </div>
+)}
       </div>
 
       {/* info section */}
