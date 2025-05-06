@@ -26,23 +26,22 @@ socketio = SocketIO(app, cors_allowed_origins="*", async_mode='eventlet')
 # ───────────────────────────────  Models & Consts  ─────────────────────────────────
 MODEL_PATH   = r"D:\UTS\Semester 3\Deep Learning\Assignment 3\PresentPerfect\runs\detect\train6\weights\best.pt"
 emotion_model = YOLO(MODEL_PATH)
-emotion_model.half()
 
 mp_fd         = mp.solutions.face_detection
-face_detector = mp_fd.FaceDetection(model_selection=1, min_detection_confidence=0.2)
+face_detector = mp_fd.FaceDetection(model_selection=1, min_detection_confidence=0.1)
 
 HEAD_PAD_TOP, HEAD_PAD_SIDE, HEAD_PAD_BOTTOM = 0.25, 0.25, 0.15
 DEVICE  = "cuda:0"
 
 mp_pose  = mp.solutions.pose
-pose     = mp_pose.Pose(static_image_mode=False, min_detection_confidence=0.5)
+pose     = mp_pose.Pose(static_image_mode=False, min_detection_confidence=0.1)
 
 mp_face  = mp.solutions.face_mesh
 face_mesh = mp_face.FaceMesh(
     static_image_mode=False,
     refine_landmarks=False,
-    min_detection_confidence=0.5,
-    min_tracking_confidence=0.5
+    min_detection_confidence=0.1,
+    min_tracking_confidence=0.1
 )
 
 G_MODEL_POINTS = np.array([
@@ -62,7 +61,10 @@ LANDMARK_IDS = dict(
 # Posture-tracking thresholds (degrees)
 SIDE_THR     = 10.0
 FORWARD_THR  = 10.0
-YAW_THR, VERT_THR = 20, 140
+YAW_THR      = 40
+
+STRAIGHT_THRESHOLD_DEG = 5.0  
+GESTURE_RATIO          = 0.20
 
 BATCH              = 1
 NUM_WORKERS        = os.cpu_count()
@@ -73,7 +75,8 @@ frame_index          = 0
 class_per_second     = defaultdict(list)
 gaze_per_second      = defaultdict(list)
 movement_per_second  = defaultdict(list)
-posture_per_second   = defaultdict(list)
+shoulder_tilt_per_second = defaultdict(list)   
+gesture_per_second       = defaultdict(list)
 state_lock           = threading.Lock()
 
 # progress based on analysed frames
@@ -109,7 +112,8 @@ def reset_state():
         class_per_second.clear()
         gaze_per_second.clear()
         movement_per_second.clear()
-        posture_per_second.clear()
+        shoulder_tilt_per_second.clear()
+        gesture_per_second.clear() 
     with processed_lock:
         processed_frames = 0
 
@@ -162,8 +166,8 @@ def emotion_batch(batch_frames, W, H, batch_secs):
     if not heads:
         return
     results = emotion_model.predict(
-        heads, imgsz=640, conf=0.25, device=DEVICE,
-        stream=False, verbose=False, half=True
+        heads, imgsz=640, conf=0.10, device=DEVICE,
+        stream=False, verbose=False
     )
     for det_res, sec in zip(results, sec_idx):
         preds = det_res.boxes
@@ -190,23 +194,30 @@ def movement_batch(batch_rgbs, batch_secs):
 
         # quantize into 1–10 bins
         # floor(mid_x*10) gives 0–9, +1 gives 1–10, clamp at 10
-        bin_idx = min(10, math.floor(mid_x * 10) + 1)
+        bin_idx = int(min(10, math.floor(mid_x * 10) + 1))
         movement_per_second[sec].append(bin_idx)
 
-        # posture
-        mid_sh = ((l_sh.x + r_sh.x) / 2, (l_sh.y + r_sh.y) / 2)
-        mid_hp = ((l_hp.x + r_hp.x) / 2, (l_hp.y + r_hp.y) / 2)
+        # ── SHOULDER STATE  (straight vs tilted) ───────────────────────
+        p1 = np.array([l_sh.x, l_sh.y])
+        p2 = np.array([r_sh.x, r_sh.y])
+        dx, dy   = (p2 - p1)
+        angle_deg = math.degrees(math.atan2(dy, dx))
+        if angle_deg > 90:   angle_deg -= 180
+        if angle_deg < -90:  angle_deg += 180
+        label_shoulder = "STRAIGHT" if abs(angle_deg) <= STRAIGHT_THRESHOLD_DEG else "TILTED"
+        shoulder_tilt_per_second[sec].append(label_shoulder)
 
-        vec_xy     = (mid_sh[0] - mid_hp[0], mid_sh[1] - mid_hp[1])
-        angle_side = abs(math.degrees(math.atan2(vec_xy[0], vec_xy[1])))
+        # ── HAND STATE  (gesturing vs at-side) ─────────────────────────
+        l_wr = lm[mp_pose.PoseLandmark.LEFT_WRIST.value]
+        r_wr = lm[mp_pose.PoseLandmark.RIGHT_WRIST.value]
+        hip_mid_x = (l_hp.x + r_hp.x) / 2.0
+        hip_mid_y = (l_hp.y + r_hp.y) / 2.0
 
-        sh_z       = (l_sh.z + r_sh.z) / 2
-        hp_z       = (l_hp.z + r_hp.z) / 2
-        vec_y      = mid_sh[1] - mid_hp[1]
-        vec_z      = sh_z - hp_z
-        angle_fwd  = abs(math.degrees(math.atan2(vec_z, vec_y)))
-
-        posture_per_second[sec].append((angle_side, angle_fwd))
+        dist_l = math.hypot(l_wr.x - hip_mid_x, l_wr.y - hip_mid_y)
+        dist_r = math.hypot(r_wr.x - hip_mid_x, r_wr.y - hip_mid_y)
+        is_gesturing = max(dist_l, dist_r) > GESTURE_RATIO
+        label_hands  = "GESTURING" if is_gesturing else "HANDS_SIDE"
+        gesture_per_second[sec].append(label_hands)
 
 def gaze_batch(batch_rgbs, batch_secs, CAM_MAT, DIST, W, H):
     for img_rgb, sec in zip(batch_rgbs, batch_secs):
@@ -257,12 +268,11 @@ def process_video(temp_path):
     cap = cv2.VideoCapture(temp_path)
     if not cap.isOpened():
         raise RuntimeError("Could not open video")
-
-    W  = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
-    H  = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
+    W  = int(640)
+    H  = int(480)
     FPS = cap.get(cv2.CAP_PROP_FPS) or 30
     total_frames = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
-    expected_to_process = (total_frames + 7) // 8   # every 4th frame
+    expected_to_process = (total_frames + 3) // 4   # every 4th frame
 
     focal  = W
     center = (W / 2, H / 2)
@@ -290,9 +300,10 @@ def process_video(temp_path):
                 for _ in range(NUM_WORKERS):
                     q.put(SENTINEL)
                 break
-
+            frame = cv2.resize(frame, (640, 480))
             # sample every 8th frame
-            if idx % 8 == 0:
+            if idx % 4 == 0:
+
                 q.put((idx, frame))
 
             idx += 1
@@ -363,23 +374,35 @@ def process_video(temp_path):
     dom_gaze    = {s: Counter(v).most_common(1)[0][0] for s, v in gaze_per_second.items()}
     move_avg    = {s: sum(xs) / len(xs) for s, xs in movement_per_second.items()}
 
-    tilt_avg  = {s: sum(a for a, _ in vals) / len(vals) for s, vals in posture_per_second.items()}
-    hunch_avg = {s: sum(b for _, b in vals) / len(vals) for s, vals in posture_per_second.items()}
+    dom_shoulder = {s: Counter(v).most_common(1)[0][0] for s, v in shoulder_tilt_per_second.items()}
+    dom_hands    = {s: Counter(v).most_common(1)[0][0] for s, v in gesture_per_second.items()}
 
-    # print("Most common class per second:"); [print(f"  Sec {s}: {c}") for s, c in dom_emotion.items()]
-    # print("Most common gaze per second:");  [print(f"  Sec {s}: {c}") for s, c in dom_gaze.items()]
-    # print("Avg horizontal position per second (0-left, 1-right):")
-    # [print(f"  Sec {s}: {move_avg[s]:.3f}") for s in sorted(move_avg)]
-    # print(f"Avg side tilt per second (> {SIDE_THR}° indicates lean):")
-    # [print(f"  Sec {s}: {tilt_avg[s]:.1f}°") for s in sorted(tilt_avg)]
-    # print(f"Avg forward hunch per second (> {FORWARD_THR}° indicates hunch):")
-    # [print(f"  Sec {s}: {hunch_avg[s]:.1f}°") for s in sorted(hunch_avg)]
+    print("Most common class per second:"); [print(f"  Sec {s}: {c}") for s, c in dom_emotion.items()]
+    print("Most common gaze per second:");  [print(f"  Sec {s}: {c}") for s, c in dom_gaze.items()]
+    print("Avg horizontal position per second (0-left, 1-right):")
+    [print(f"  Sec {s}: {move_avg[s]:.3f}") for s in sorted(move_avg)]
+    print(f"Avg side tilt per second (> {SIDE_THR}° indicates lean):")
+    [print(f"  Sec {s}: {dom_shoulder[s]}°") for s in sorted(dom_shoulder)]
+    print(f"Avg forward hunch per second (> {FORWARD_THR}° indicates hunch):")
+    [print(f"  Sec {s}: {dom_hands[s]}°") for s in sorted(dom_hands)]
     payload = {
         'emotion':    dom_emotion,
+        'emotionScore':    20,
+        'emotionText': "This is what you need to do to improve",
         'gaze':       dom_gaze,
-        'horizontal': move_avg,
-        'tilt':       tilt_avg,
-        'hunch':      hunch_avg,
+        'gazeScore':    20,
+        'gazeText': "This is what you need to do to improve",
+        'movement': move_avg,
+        'movementScore':    20,
+        'movementText': "This is what you need to do to improve",
+        'shoulder': dom_shoulder,
+        'shoulderScore':    20,
+        'shoulderText': "This is what you need to do to improve",
+        'gesture': dom_hands,
+        'handsScore':    20,
+        'gestureText':'This is what you need to do to improve',
+        'overallScore': 100,
+        'overallSummary': "This is the overall summary"
     }
     socketio.emit('processing-complete',
                   {'message': 'Processing done!', 'progress': '100','data': payload})
