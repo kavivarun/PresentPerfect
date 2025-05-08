@@ -31,7 +31,7 @@ export default function ReportPage() {
   const handlePrint = useReactToPrint({
     // NEW API — just give it the ref object
     contentRef: reportRef,
-    copyStyles : true,
+    copyStyles: true,
     documentTitle: 'Performance Report',
   });
 
@@ -46,6 +46,7 @@ export default function ReportPage() {
     movementScore,
     shoulderScore,
     handsScore,
+    speechScore,
     overallScore,
     overallSummary
   } = reportData;
@@ -150,7 +151,8 @@ export default function ReportPage() {
     { subject: 'Gaze', A: gazeScore, fullMark: 100 },
     { subject: 'Movement', A: movementScore, fullMark: 100 },
     { subject: 'Shoulder', A: shoulderScore, fullMark: 100 },
-    { subject: 'Gesture', A: handsScore, fullMark: 100 }
+    { subject: 'Gesture', A: handsScore, fullMark: 100 },
+    { subject: 'Speech', A: speechScore, fullMark: 100 }
   ];
 
   const styles = {
@@ -244,6 +246,19 @@ export default function ReportPage() {
       fontWeight: '500',
       lineHeight: '1.5',
       marginTop: '20px',
+      wordWrap: 'break-word',
+      overflowWrap: 'break-word'
+    },
+    textSection:{
+      backgroundColor: 'white',
+      color: '#6b4caf',
+      borderRadius: '15px',
+      padding: '0px',
+      textAlign: 'start',
+      fontSize: '18px',
+      fontWeight: '500',
+      lineHeight: '1.5',
+      marginTop: '0px',
       wordWrap: 'break-word',
       overflowWrap: 'break-word'
     },
@@ -346,7 +361,7 @@ export default function ReportPage() {
     suggestionText: {
       fontSize: '14px',
       color: '#555',
-      textAlign: 'left',  
+      textAlign: 'left',
       alignSelf: 'flex-aSTART'
     },
     barLabels: {
@@ -380,280 +395,310 @@ export default function ReportPage() {
 
 
   return (
-    <div  style={styles.container}>
+    <div style={styles.container}>
       <div >
-      <div  ref={reportRef}style={styles.reportBoxOuter}>
-        <div style={styles.reportBoxInner}>
-          <h1 style={styles.title}>Here Are Your Results!</h1>
-          <div style={styles.divider}></div>
+        <div ref={reportRef} style={styles.reportBoxOuter}>
+          <div style={styles.reportBoxInner}>
+            <h1 style={styles.title}>Here Are Your Results!</h1>
+            <div style={styles.divider}></div>
 
-          <div className="report-container" style={styles.reportContainer}>
-            {/* LEFT PANEL */}
-            <div className="left-panel" style={styles.leftPanel}>
-              <div style={{ textAlign: 'center', marginBottom: '10px', color: '#6b4caf', fontSize: '20px', fontWeight: '600' }}>
-                Performance Radar
+            <div className="report-container" style={styles.reportContainer}>
+              {/* LEFT PANEL */}
+              <div className="left-panel" style={styles.leftPanel}>
+                <div style={{ textAlign: 'center', marginBottom: '10px', color: '#6b4caf', fontSize: '20px', fontWeight: '600' }}>
+                  Performance Radar
+                </div>
+                <RadarChart width={400} height={300} cx={200} cy={150} outerRadius={120} data={radarData}>
+                  <PolarGrid stroke="#6b4caf" />
+                  <PolarAngleAxis dataKey="subject" stroke="#6b4caf" />
+                  <PolarRadiusAxis angle={30} domain={[0, 100]} tick={false} axisLine={false} />
+                  <Radar name="Score" dataKey="A" stroke="#6b4caf" fill="#6b4caf" fillOpacity={0.6} isAnimationActive={true} />
+                  <Tooltip />
+                </RadarChart>
               </div>
-              <RadarChart width={400} height={300} cx={200} cy={150} outerRadius={120} data={radarData}>
-                <PolarGrid stroke="#6b4caf" />
-                <PolarAngleAxis dataKey="subject" stroke="#6b4caf" />
-                <PolarRadiusAxis angle={30} domain={[0, 100]} tick={false} axisLine={false} />
-                <Radar name="Score" dataKey="A" stroke="#6b4caf" fill="#6b4caf" fillOpacity={0.6} isAnimationActive={true} />
-                <Tooltip />
-              </RadarChart>
+
+              {/* RIGHT PANEL */}
+              <div className="right-panel" style={styles.rightPanel}>
+                <div style={styles.card}>
+                  <div style={styles.cardTitle}>Score</div>
+                  <div style={styles.cardValue}>{overallScore}%</div>
+                </div>
+                <div style={styles.card}>
+                  <div style={styles.cardTitle}>Rank</div>
+                  <div style={styles.cardValue}>{rank}</div>
+                </div>
+                <div style={{ ...styles.card, ...styles.userInfoCard }}>
+                  <div style={styles.cardTitle}>Username</div>
+                  <div style={styles.userInfoValue}>{username}</div>
+                  <div style={styles.cardTitle}>Date</div>
+                  <div style={styles.userInfoValue}>{date}</div>
+                </div>
+              </div>
             </div>
 
-            {/* RIGHT PANEL */}
-            <div className="right-panel" style={styles.rightPanel}>
-              <div style={styles.card}>
-                <div style={styles.cardTitle}>Score</div>
-                <div style={styles.cardValue}>{overallScore}%</div>
-              </div>
-              <div style={styles.card}>
-                <div style={styles.cardTitle}>Rank</div>
-                <div style={styles.cardValue}>{rank}</div>
-              </div>
-              <div style={{ ...styles.card, ...styles.userInfoCard }}>
-                <div style={styles.cardTitle}>Username</div>
-                <div style={styles.userInfoValue}>{username}</div>
-                <div style={styles.cardTitle}>Date</div>
-                <div style={styles.userInfoValue}>{date}</div>
+            {/* OVERVIEW SECTION */}
+            <div style={styles.summarySection}>
+              <div style={styles.summaryTitle}>Overview</div>
+              <div>{overallSummary}</div>
+            </div>
+
+            <div style={styles.divider}></div>
+            <h1 style={styles.title}>Speech Analysis</h1>
+            {/* TRANSCRIPT & SPEECH IMPROVEMENT SECTIONS */}
+            <div style={styles.breakdownSection}>
+              <div style={styles.summaryTitle}>Transcript</div>
+              <div style={styles.textSection}>
+                {reportData.transcriptSegments
+                  .split('\n')
+                  .map((line, idx) => {
+                    // pull out “[0.00s - 6.70s]” vs the rest
+                    const m = line.match(/^\[(.*?)\]\s*(.*)/) || [];
+                    const timestamp = m[1] || line;
+                    const text = m[2] || '';
+                    return (
+                      <div key={idx} style={{ marginBottom: '1px' }}>
+                        <span style={{ color: '#6b4caf', fontWeight: 400 }}>
+                          [{timestamp}]
+                        </span>{' '}
+                        <span style={{ color: '#000', fontWeight: 200 }}>
+                          {text}
+                        </span>
+                      </div>
+                    );
+                  })}
               </div>
             </div>
-          </div>
-
-          {/* OVERVIEW SECTION */}
-          <div style={styles.summarySection}>
-            <div style={styles.summaryTitle}>Overview</div>
-            <div>{overallSummary}</div>
-          </div>
-
-          <div style={styles.divider}></div>
-
-          {/* SCORE BREAKDOWN SECTION */}
-          <div style={styles.breakdownSection}>
-            <div style={styles.breakdownTitle}>Score Breakdown</div>
-
-            <div style={styles.breakdownContent}>
-              {/* Face Emotion Analysis */}
-              <div style={styles.placeholderBox}>
-                <div style={styles.graphTitle}>Face Emotion Analysis</div>
-                <div style={{
-                  ...styles.graphBar,
-                  background: gradientString
-                }}>
-                  {emotionPerSecond.map((emotion, index) => (
-                    <div
-                      key={index}
-                      title={`Time: ${index}: ${emotion}`}
-                      style={{
-                        ...styles.graphBlock,
-                        backgroundColor: emotionColors[emotion] || '#000',
-                        cursor: 'pointer'
-                      }}
-                    />
-                  ))}
-                </div>
-                {/* Video Start / End labels */}
-                <div style={styles.barLabels}>
-                  <span style={styles.barLabel}>Video Start</span>
-                  <span style={styles.barLabel}>Video End</span>
-                </div>
-
-                <div style={styles.legendContainer}>
-                  {Object.entries(emotionColors).map(([emotion, color]) => (
-                    <div key={emotion} style={styles.legendItem}>
-                      <div style={{ ...styles.legendColor, backgroundColor: color }} />
-                      <div style={styles.legendLabel}>{emotion}</div>
-                    </div>
-                  ))}
-                </div>
-
-                <div style={styles.suggestionsTitle}>Suggestions for Improvement</div>
-                <div style={styles.suggestionText}>{reportData.emotionText}</div>
+            <div style={styles.breakdownSection}>
+              <div style={styles.summaryTitle}>Speech Improvement Assistance</div>
+              <div style={styles.suggestionText}>
+                {reportData.speechImprovements}
               </div>
+            </div>
+            <div style={styles.divider}></div>
+            {/* SCORE BREAKDOWN SECTION */}
+            <div style={styles.breakdownSection}>
+              <div style={styles.breakdownTitle}>Score Breakdown</div>
 
-              {/* Placeholder Graph 2 */}
-              <div style={styles.placeholderBox}>
-                <div style={styles.graphTitle}>Movement Analysis</div>
-                <div style={{ width: '100%', height: 300 }}>
-                  <ResponsiveContainer>
-                    <LineChart data={movementData}>
-                      <CartesianGrid strokeDasharray="3 3" />
-                      <XAxis
-                        dataKey="second"
-                        tickFormatter={(val, index) => {
-                          if (index === 2) return 'Video Start';
-                          if (index === movementData.length - 6) return 'Video End';
-                          return '';
-                        }}
-                      />
-                      <YAxis
-                        domain={[0, 10]}
-                        ticks={[1, 3, 5, 7, 9]}
-                        tickFormatter={(val) => {
-                          if (val === 1) return 'Left';
-                          if (val === 3) return 'Middle Left';
-                          if (val === 5) return 'Center';
-                          if (val === 7) return 'Middle Right';
-                          if (val === 9) return 'Right';
-                          return '';
-                        }}
-                      />
-                      <Tooltip
-                        labelFormatter={(label) => `Time: ${label}`}
-                        formatter={(value, name, props) =>
-                          [`${value.toFixed(2)} (${props.payload.label})`, 'Position']
-                        }
-                      />
-                      <Line type="monotone" dataKey="position" stroke="#6b4caf" dot />
-                    </LineChart>
-                  </ResponsiveContainer>
-                </div>
-                <div style={styles.suggestionsTitle}>Suggestions for Improvement</div>
-                <div style={styles.suggestionText}>{reportData.movementText}</div>
-              </div>
-
-              {/* Placeholder Graph 3 */}
-              <div style={{ ...styles.breakdownContent, flexDirection: 'row', justifyContent: 'space-between' }}>
-                {/* Shoulder Posture Chart */}
-                <div style={{ ...styles.placeholderBox, flex: 1 }}>
-                  <div style={styles.graphTitle}>Shoulder Posture Analysis</div>
-                  <ResponsiveContainer width="100%" height={250}>
-                    <PieChart>
-                      <Pie
-                        data={shoulderData}
-                        dataKey="value"
-                        nameKey="name"
-                        outerRadius={60}
-                        label={({ value }) => `${value}%`}
-                      >
-                        {shoulderData.map((entry, index) => (
-                          <Cell key={`cell-shoulder-${index}`} fill={pieColors[index % pieColors.length]} />
-                        ))}
-                      </Pie>
-                      <Tooltip formatter={(value) => `${value}%`} />
-                      <Legend />
-                    </PieChart>
-                  </ResponsiveContainer>
-                  <div style={styles.suggestionsTitle}>Suggestions for Improvement</div>
-                  <div style={styles.suggestionText}>{reportData.shoulderText}</div>
-                </div>
-
-                {/* Hand Gesture Chart */}
-                <div style={{ ...styles.placeholderBox, flex: 1 }}>
-                  <div style={styles.graphTitle}>Hand Gestures Analysis</div>
-                  <ResponsiveContainer width="100%" height={250}>
-                    <PieChart>
-                      <Pie
-                        data={handsData}
-                        dataKey="value"
-                        nameKey="name"
-                        outerRadius={60}
-                        label={({ value }) => `${value}%`}
-                      >
-                        {handsData.map((entry, index) => (
-                          <Cell key={`cell-hands-${index}`} fill={pieColors[index % pieColors.length]} />
-                        ))}
-                      </Pie>
-                      <Tooltip formatter={(value) => `${value}%`} />
-                      <Legend />
-                    </PieChart>
-                  </ResponsiveContainer>
-                  <div style={styles.suggestionsTitle}>Suggestions for Improvement</div>
-                  <div style={styles.suggestionText}>{reportData.gestureText}</div>
-                </div>
-
-              </div>
-              {/* Placeholder Graph 3 */}
-              <div style={styles.placeholderBox}>
-                <div style={styles.graphTitle}>Graph 3 Title</div>
-                <div style={{
-                  position: 'relative',
-                  width: '300px',
-                  height: '300px',
-                  margin: '20px auto'
-                }}>
-                  {/* Purple human SVG background */}
-                  <Mansvg style={{
-                    position: 'absolute',
-                    width: '70%',
-                    height: '110%',
-                    fill: '#6b4caf',
-                    opacity: 1,
-                    stroke: '#6b4caf',
-                    left: '15%',
-                    top: '-5%'
-                  }} />
-
-                  {/* Heatmap grid */}
+              <div style={styles.breakdownContent}>
+                {/* Face Emotion Analysis */}
+                <div style={styles.placeholderBox}>
+                  <div style={styles.graphTitle}>Face Emotion Analysis</div>
                   <div style={{
-                    position: 'absolute',
-                    top: 0,
-                    left: 0,
-                    display: 'grid',
-                    gridTemplateColumns: 'repeat(3, 1fr)',
-                    gridTemplateRows: 'repeat(3, 1fr)',
-                    width: '100%',
-                    height: '100%',
-                    zIndex: 1
+                    ...styles.graphBar,
+                    background: gradientString
                   }}>
-                    {['up left', 'up', 'up right',
-                      'left', 'center', 'right',
-                      'down left', 'down', 'down right'].map((pos) => (
-                        <div
-                          key={pos}
-                          onMouseEnter={(e) => e.currentTarget.style.transform = 'scale(1.1)'}
-                          onMouseLeave={(e) => e.currentTarget.style.transform = 'scale(1)'}
-                          style={{
-                            backgroundColor: getHeatColor(gazePercentages[pos] || 0),
-                            display: 'flex',
-                            flexDirection: 'column',
-                            alignItems: 'center',
-                            justifyContent: 'center',
-                            fontSize: '14px',
-                            fontWeight: '600',
-                            color: '#fff',
-                            textShadow: '0 1px 3px rgba(0,0,0,0.8)',
-                            position: 'relative',
-                            cursor: 'pointer',
-                            transition: 'transform 0.2s ease, background-color 0.3s ease',
-                            borderRadius: '12px',
-                            padding: '6px',
-                            margin: '2px'
-                          }}
-                        >
-                          <div style={{
-                            fontSize: '16px',
-                            fontWeight: '700'
-                          }}>
-                            {gazePercentages[pos]}%
-                          </div>
-                          <div style={{
-                            fontSize: '12px',
-                            marginTop: '2px'
-                          }}>
-                            {pos}
-                          </div>
-                        </div>
-                      ))}
+                    {emotionPerSecond.map((emotion, index) => (
+                      <div
+                        key={index}
+                        title={`Time: ${index}: ${emotion}`}
+                        style={{
+                          ...styles.graphBlock,
+                          backgroundColor: emotionColors[emotion] || '#000',
+                          cursor: 'pointer'
+                        }}
+                      />
+                    ))}
                   </div>
+                  {/* Video Start / End labels */}
+                  <div style={styles.barLabels}>
+                    <span style={styles.barLabel}>Video Start</span>
+                    <span style={styles.barLabel}>Video End</span>
+                  </div>
+
+                  <div style={styles.legendContainer}>
+                    {Object.entries(emotionColors).map(([emotion, color]) => (
+                      <div key={emotion} style={styles.legendItem}>
+                        <div style={{ ...styles.legendColor, backgroundColor: color }} />
+                        <div style={styles.legendLabel}>{emotion}</div>
+                      </div>
+                    ))}
+                  </div>
+
+                  <div style={styles.suggestionsTitle}>Suggestions for Improvement</div>
+                  <div style={styles.suggestionText}>{reportData.emotionText}</div>
                 </div>
-                <div style={styles.suggestionsTitle}>Suggestions for Improvement</div>
-                <div style={styles.suggestionText}>{reportData.gazeText}</div>
+
+                {/* Placeholder Graph 2 */}
+                <div style={styles.placeholderBox}>
+                  <div style={styles.graphTitle}>Movement Analysis</div>
+                  <div style={{ width: '100%', height: 300 }}>
+                    <ResponsiveContainer>
+                      <LineChart data={movementData}>
+                        <CartesianGrid strokeDasharray="3 3" />
+                        <XAxis
+                          dataKey="second"
+                          tickFormatter={(val, index) => {
+                            if (index === 2) return 'Video Start';
+                            if (index === movementData.length - 6) return 'Video End';
+                            return '';
+                          }}
+                        />
+                        <YAxis
+                          domain={[0, 10]}
+                          ticks={[1, 3, 5, 7, 9]}
+                          tickFormatter={(val) => {
+                            if (val === 1) return 'Left';
+                            if (val === 3) return 'Middle Left';
+                            if (val === 5) return 'Center';
+                            if (val === 7) return 'Middle Right';
+                            if (val === 9) return 'Right';
+                            return '';
+                          }}
+                        />
+                        <Tooltip
+                          labelFormatter={(label) => `Time: ${label}`}
+                          formatter={(value, name, props) =>
+                            [`${value.toFixed(2)} (${props.payload.label})`, 'Position']
+                          }
+                        />
+                        <Line type="monotone" dataKey="position" stroke="#6b4caf" dot />
+                      </LineChart>
+                    </ResponsiveContainer>
+                  </div>
+                  <div style={styles.suggestionsTitle}>Suggestions for Improvement</div>
+                  <div style={styles.suggestionText}>{reportData.movementText}</div>
+                </div>
+
+                <div style={{ ...styles.breakdownContent, flexDirection: 'row', justifyContent: 'space-between' }}>
+                  {/* Shoulder Posture Chart */}
+                  <div style={{ ...styles.placeholderBox, flex: 1 }}>
+                    <div style={styles.graphTitle}>Shoulder Posture Analysis</div>
+                    <ResponsiveContainer width="100%" height={250}>
+                      <PieChart>
+                        <Pie
+                          data={shoulderData}
+                          dataKey="value"
+                          nameKey="name"
+                          outerRadius={60}
+                          label={({ value }) => `${value}%`}
+                        >
+                          {shoulderData.map((entry, index) => (
+                            <Cell key={`cell-shoulder-${index}`} fill={pieColors[index % pieColors.length]} />
+                          ))}
+                        </Pie>
+                        <Tooltip formatter={(value) => `${value}%`} />
+                        <Legend />
+                      </PieChart>
+                    </ResponsiveContainer>
+                    <div style={styles.suggestionsTitle}>Suggestions for Improvement</div>
+                    <div style={styles.suggestionText}>{reportData.shoulderText}</div>
+                  </div>
+
+                  {/* Hand Gesture Chart */}
+                  <div style={{ ...styles.placeholderBox, flex: 1 }}>
+                    <div style={styles.graphTitle}>Hand Gestures Analysis</div>
+                    <ResponsiveContainer width="100%" height={250}>
+                      <PieChart>
+                        <Pie
+                          data={handsData}
+                          dataKey="value"
+                          nameKey="name"
+                          outerRadius={60}
+                          label={({ value }) => `${value}%`}
+                        >
+                          {handsData.map((entry, index) => (
+                            <Cell key={`cell-hands-${index}`} fill={pieColors[index % pieColors.length]} />
+                          ))}
+                        </Pie>
+                        <Tooltip formatter={(value) => `${value}%`} />
+                        <Legend />
+                      </PieChart>
+                    </ResponsiveContainer>
+                    <div style={styles.suggestionsTitle}>Suggestions for Improvement</div>
+                    <div style={styles.suggestionText}>{reportData.gestureText}</div>
+                  </div>
+
+                </div>
+                {/* Placeholder Graph 3 */}
+                <div style={styles.placeholderBox}>
+                  <div style={styles.graphTitle}>Gaze Analysis</div>
+                  <div style={{
+                    position: 'relative',
+                    width: '300px',
+                    height: '300px',
+                    margin: '20px auto'
+                  }}>
+                    {/* Purple human SVG background */}
+                    <Mansvg style={{
+                      position: 'absolute',
+                      width: '70%',
+                      height: '110%',
+                      fill: '#6b4caf',
+                      opacity: 1,
+                      stroke: '#6b4caf',
+                      left: '15%',
+                      top: '-5%'
+                    }} />
+
+                    {/* Heatmap grid */}
+                    <div style={{
+                      position: 'absolute',
+                      top: 0,
+                      left: 0,
+                      display: 'grid',
+                      gridTemplateColumns: 'repeat(3, 1fr)',
+                      gridTemplateRows: 'repeat(3, 1fr)',
+                      width: '100%',
+                      height: '100%',
+                      zIndex: 1
+                    }}>
+                      {['up left', 'up', 'up right',
+                        'left', 'center', 'right',
+                        'down left', 'down', 'down right'].map((pos) => (
+                          <div
+                            key={pos}
+                            onMouseEnter={(e) => e.currentTarget.style.transform = 'scale(1.1)'}
+                            onMouseLeave={(e) => e.currentTarget.style.transform = 'scale(1)'}
+                            style={{
+                              backgroundColor: getHeatColor(gazePercentages[pos] || 0),
+                              display: 'flex',
+                              flexDirection: 'column',
+                              alignItems: 'center',
+                              justifyContent: 'center',
+                              fontSize: '14px',
+                              fontWeight: '600',
+                              color: '#fff',
+                              textShadow: '0 1px 3px rgba(0,0,0,0.8)',
+                              position: 'relative',
+                              cursor: 'pointer',
+                              transition: 'transform 0.2s ease, background-color 0.3s ease',
+                              borderRadius: '12px',
+                              padding: '6px',
+                              margin: '2px'
+                            }}
+                          >
+                            <div style={{
+                              fontSize: '16px',
+                              fontWeight: '700'
+                            }}>
+                              {gazePercentages[pos]}%
+                            </div>
+                            <div style={{
+                              fontSize: '12px',
+                              marginTop: '2px'
+                            }}>
+                              {pos}
+                            </div>
+                          </div>
+                        ))}
+                    </div>
+                  </div>
+                  <div style={styles.suggestionsTitle}>Suggestions for Improvement</div>
+                  <div style={styles.suggestionText}>{reportData.gazeText}</div>
+                </div>
               </div>
             </div>
-          </div>
 
+          </div>
         </div>
       </div>
-      </div>
       <div style={{ display: 'flex', justifyContent: 'center', marginTop: '20px' }}>
-  <button className="download-button" onClick={handlePrint}>
-    <FaDownload />
-    Download Report
-  </button>
-</div>
-<style>{`
+        <button className="download-button" onClick={handlePrint}>
+          <FaDownload />
+          Download Report
+        </button>
+      </div>
+      <style>{`
 .download-button {
   background-color: #6b4caf;
   color: white;
