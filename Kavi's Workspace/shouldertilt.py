@@ -7,7 +7,7 @@ import math
 VIDEO_PATH  = r"D:\UTS\Semester 3\Deep Learning\Assignment 3\PresentPerfect\SampleVideos\Video1.mp4"
 WINDOW_NAME = "Shoulder Straightness Check"
 FONT        = cv2.FONT_HERSHEY_SIMPLEX
-STRAIGHT_THRESHOLD_DEG = 5.0  # max degrees off horizontal to call "straight"
+STRAIGHT_THRESHOLD_DEG = 7.0  # max degrees off horizontal to call "straight"
 
 # --- set up MediaPipe Pose ----
 mp_pose = mp.solutions.pose
@@ -19,7 +19,7 @@ pose = mp_pose.Pose(
     min_tracking_confidence=0.5
 )
 
-cap = cv2.VideoCapture(VIDEO_PATH)
+cap = cv2.VideoCapture(0)
 if not cap.isOpened():
     raise RuntimeError(f"Unable to open video file: {VIDEO_PATH}")
 

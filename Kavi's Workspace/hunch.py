@@ -8,7 +8,7 @@ WINDOW_NAME      = "Hand Position: Side vs Gesturing"
 FONT             = cv2.FONT_HERSHEY_SIMPLEX
 
 # threshold: if a wrist is more than this fraction of frame-width away from hip midpoint → gesturing
-GESTURE_RATIO    = 0.15  
+GESTURE_RATIO    = 0.25  
 
 # --- initialize MediaPipe Pose ---
 mp_pose = mp.solutions.pose
@@ -19,7 +19,7 @@ pose    = mp_pose.Pose(
     min_tracking_confidence=0.5
 )
 
-cap = cv2.VideoCapture(VIDEO_PATH)
+cap = cv2.VideoCapture(0)
 if not cap.isOpened():
     raise RuntimeError(f"Unable to open video file: {VIDEO_PATH}")
 

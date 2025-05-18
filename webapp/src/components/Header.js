@@ -12,7 +12,6 @@ export default function Header() {
 
   const navItems = [
     { path: '/upload', label: 'Home' },
-    { path: '/faqs',   label: 'FAQs' },
     { path: '/about',  label: 'About' },
   ];
 

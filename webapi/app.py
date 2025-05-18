@@ -13,16 +13,16 @@ from concurrent.futures import ThreadPoolExecutor, wait
 import cv2
 import mediapipe as mp
 import numpy as np
-import torch, torchvision
+import torch
 from ultralytics import YOLO
 import whisper
 
 from dotenv import load_dotenv
-import json
 from typing import Dict, List, Any
 from pydantic import BaseModel
-from azure.identity import DefaultAzureCredential
-from openai import AzureOpenAI
+from openai import AzureOpenAI, OpenAI
+
+from itertools import chain                          
 
 torch.backends.cudnn.benchmark = True
 DEVICE = "cuda:0"
@@ -33,16 +33,23 @@ CORS(app)
 socketio = SocketIO(app, cors_allowed_origins="*", async_mode='eventlet')
 
 # ───────────────────────────────  Models & Consts  ─────────────────────────────────
-MODEL_PATH   = r"D:\UTS\Semester 3\Deep Learning\Assignment 3\PresentPerfect\runs\detect\train6\weights\best.pt"
+MODEL_PATH   = os.getenv("MODEL_PATH")
 emotion_model = YOLO(MODEL_PATH)
 
 whisper_model = whisper.load_model("turbo", device=DEVICE) 
 
-client = AzureOpenAI(
-  azure_endpoint = os.getenv("AZURE_OPENAI_ENDPOINT"), 
-  api_key=os.getenv("AZURE_OPENAI_API_KEY"),  
-  api_version="2024-10-21"
-)
+USE_AZURE = os.getenv("USE_AZURE_OPENAI", "false").lower() == "true"
+
+if USE_AZURE:
+    client = AzureOpenAI(
+        azure_endpoint=os.getenv("AZURE_OPENAI_ENDPOINT"),
+        api_key=os.getenv("AZURE_OPENAI_API_KEY"),
+        api_version="2024-10-21"
+    )
+else:
+    client = OpenAI(
+        api_key=os.getenv("OPENAI_API_KEY")
+    )
 class PresentationFeedback(BaseModel):
     speechImprovements: str
     speechScore: int
@@ -65,7 +72,7 @@ mp_fd         = mp.solutions.face_detection
 face_detector = mp_fd.FaceDetection(model_selection=1, min_detection_confidence=0.1)
 
 HEAD_PAD_TOP, HEAD_PAD_SIDE, HEAD_PAD_BOTTOM = 0.25, 0.25, 0.15
-DEVICE  = "cuda:0"
+DEVICE = "cuda:0" if torch.cuda.is_available() else "cpu"
 
 mp_pose  = mp.solutions.pose
 pose     = mp_pose.Pose(static_image_mode=False, min_detection_confidence=0.1)
@@ -95,10 +102,10 @@ LANDMARK_IDS = dict(
 # Posture-tracking thresholds (degrees)
 SIDE_THR     = 10.0
 FORWARD_THR  = 10.0
-YAW_THR      = 40
+YAW_THR      = 30
 
-STRAIGHT_THRESHOLD_DEG = 5.0  
-GESTURE_RATIO          = 0.20
+STRAIGHT_THRESHOLD_DEG = 7.0  
+GESTURE_RATIO          = 0.22
 
 BATCH              = 1
 NUM_WORKERS        = os.cpu_count()
@@ -178,7 +185,7 @@ def get_direction(yaw, pitch):
 
 # ─────────────────────  LLM CALL  ────────────────────────────
 def get_feedback_payload(
-    dom_emotion: Dict[int, str],
+    dom_emotion,
     dom_gaze:    Dict[int, str],
     move_avg:    Dict[int, float],
     dom_shoulder:Dict[int, str],
@@ -188,16 +195,53 @@ def get_feedback_payload(
 
 
     # Build system + user messages
-    system = "You are an expert presentation coach. Output must match the PresentationFeedback schema exactly."
+    system = (
+    "You are an experienced presentation coach. Your reply **must be a single JSON object** that follows the exact structure of the PresentationFeedback schema shown below—no extra keys, text, or formatting.\n\n"
+    "PresentationFeedback schema:\n"
+    "{\n"
+    "  'speechImprovements\": string,\n"
+    "  'speechScore\":       integer,   // 1-100\n"
+    "  'emotionScore\":      integer,   // 1-100\n"
+    "  'emotionText\":       string,\n"
+    "  'gazeScore\":         integer,   // 1-100\n"
+    "  'gazeText\":          string,\n"
+    "  'movementScore\":     integer,   // 1-100\n"
+    "  'movementText\":      string,\n"
+    "  'shoulderScore\":     integer,   // 1-100\n"
+    "  'shoulderText\":      string,\n"
+    "  'handsScore\":        integer,   // 1-100\n"
+    "  'gestureText\":       string,\n"
+    "  'overallScore\":      integer,   // 1-100  (average of the five sub-scores)\n"
+    "  'overallSummary':    string\n"
+    "}\n\n"
+    "INSTRUCTIONS\n"
+    "1. Read the transcript to understand the presentation’s content and intent.\n"
+    "2. Use the analytics timeline to assess the presenter’s delivery.\n"
+    "3. Fill every field of the PresentationFeedback JSON:\n"
+    "   • *speechScore* – quality of wording, structure, clarity (1-100). A good presentation script should be clear, structured, and support the presentation intent.\n"
+    "   • *emotionScore* – how well facial emotion matches the script (1-100). A good presenter should use their emotion to support their presentation intent.\n"
+    "   • *gazeScore* – audience engagement through eye contact (1-100). A good presenter engages their audience by not focusing their gaze on only one spot during their presentation.\n"
+    "   • *movementScore* – purposeful use of stage space (1-100). A good presenter uses their stage effectively; they should not move too little or too much.\n"
+    "   • *shoulderScore* – confident posture (1-100). A good presenter should be confident and appear reliable.\n"
+    "   • *handsScore* – effective hand gestures (1-100). A good presenter uses their gestures effectively to deliver their presentation.\n"
+    "   • Provide detailed text recommendations for each area.\n"
+    "4. Calculate *overallScore* as the average of speechScore, emotionScore, gazeScore, movementScore, shoulderScore, and handsScore.\n"
+    "5. Summarise the key action items in *overallSummary*.\n\n"
+    "**Return only the JSON object that conforms to the schema.**"
+)
     user = f"""
-Analytics:
-- Emotion/sec: {dom_emotion}
-- Gaze/sec:    {dom_gaze}
-- Move avg/sec:{move_avg}
-- Shoulder/sec:{dom_shoulder}
-- Hands/sec:   {dom_hands}
-
-Transcript:
+Below are (1) second‑by‑second analytics extracted from the video and (2) the full speech transcript.
+ 
+-----------------------------------------------
+ANALYTICS  (one entry per second)
+  • Emotion compiled by transcript speaking time : {dom_emotion}      // dominant facial emotion
+  • Gaze_sec    : {dom_gaze}         // gaze region: centre, up, down, left, right, upleft, upright, downleft, downright
+  • Move_avg_sec: {move_avg}         // X‑axis position 0‑10 (0 = far left, 10 = far right)
+  • Shoulder_sec: {dom_shoulder}     // posture flag: slouch / upright
+  • Hands_sec   : {dom_hands}        // gesture flag: gesturing / static
+-----------------------------------------------
+ 
+TRANSCRIPT
 {segments}
 
 Respond with ONLY a JSON object matching the PresentationFeedback model.
@@ -205,7 +249,7 @@ Respond with ONLY a JSON object matching the PresentationFeedback model.
 
     # Request and parse
     completion = client.beta.chat.completions.parse(
-        model="gpt-4o",                 
+        model="gpt-4.1",                 
         messages=[
             {"role": "system", "content": system},
             {"role": "user",   "content": user}
@@ -244,11 +288,19 @@ def emotion_batch(batch_frames, W, H, batch_secs):
         heads, imgsz=640, conf=0.10, device=DEVICE,
         stream=False, verbose=False
     )
+    NEUTRAL_CLASSES = {"Fear", "Contempt", "Disgust"}
+
     for det_res, sec in zip(results, sec_idx):
         preds = det_res.boxes
         if preds is not None and preds.cls.numel() > 0:
             for cls_tensor in preds.cls:
-                class_per_second[sec].append(emotion_model.names[int(cls_tensor.item())])
+                class_name = emotion_model.names[int(cls_tensor.item())]
+                if class_name == "Surprise":
+                    class_name = "Happy"
+                if class_name in NEUTRAL_CLASSES:
+                    class_per_second[sec].append("Neutral")
+                else:
+                    class_per_second[sec].append(class_name)
 
 def movement_batch(batch_rgbs, batch_secs):
     for img_rgb, sec in zip(batch_rgbs, batch_secs):
@@ -279,7 +331,7 @@ def movement_batch(batch_rgbs, batch_secs):
         angle_deg = math.degrees(math.atan2(dy, dx))
         if angle_deg > 90:   angle_deg -= 180
         if angle_deg < -90:  angle_deg += 180
-        label_shoulder = "STRAIGHT" if abs(angle_deg) <= STRAIGHT_THRESHOLD_DEG else "TILTED"
+        label_shoulder = "Shoulders Straight" if abs(angle_deg) <= STRAIGHT_THRESHOLD_DEG else "Shoulders Tilted"
         shoulder_tilt_per_second[sec].append(label_shoulder)
 
         # ── HAND STATE  (gesturing vs at-side) ─────────────────────────
@@ -291,14 +343,18 @@ def movement_batch(batch_rgbs, batch_secs):
         dist_l = math.hypot(l_wr.x - hip_mid_x, l_wr.y - hip_mid_y)
         dist_r = math.hypot(r_wr.x - hip_mid_x, r_wr.y - hip_mid_y)
         is_gesturing = max(dist_l, dist_r) > GESTURE_RATIO
-        label_hands  = "GESTURING" if is_gesturing else "HANDS_SIDE"
+        label_hands  = "Gesturing" if is_gesturing else "Idle Hands"
         gesture_per_second[sec].append(label_hands)
 
 def gaze_batch(batch_rgbs, batch_secs, CAM_MAT, DIST, W, H):
     for img_rgb, sec in zip(batch_rgbs, batch_secs):
+        # process frame for face landmarks
         res = face_mesh.process(img_rgb)
         if not res.multi_face_landmarks:
+            # no face detected: assign center gaze
+            gaze_per_second[sec].append(get_direction(0.0, 0.0))
             continue
+
         lm = res.multi_face_landmarks[0]
         pts2d = np.array([
             (lm.landmark[LANDMARK_IDS["nose_tip"]].x  * W,
@@ -314,12 +370,23 @@ def gaze_batch(batch_rgbs, batch_secs, CAM_MAT, DIST, W, H):
             (lm.landmark[LANDMARK_IDS["mouth_right"]].x * W,
              lm.landmark[LANDMARK_IDS["mouth_right"]].y * H)
         ], dtype=np.float64)
-        ok, rvec, _ = cv2.solvePnP(G_MODEL_POINTS, pts2d, CAM_MAT, DIST, flags=cv2.SOLVEPNP_ITERATIVE)
+
+        # estimate head pose
+        ok, rvec, _ = cv2.solvePnP(
+            G_MODEL_POINTS, pts2d, CAM_MAT, DIST,
+            flags=cv2.SOLVEPNP_ITERATIVE
+        )
         if not ok:
+            # PnP failed: assign center gaze
+            gaze_per_second[sec].append(get_direction(0.0, 0.0))
             continue
+
+        # convert rotation vector to matrix and extract angles
         rmat, _ = cv2.Rodrigues(rvec)
         angles, *_ = cv2.RQDecomp3x3(rmat)
         yaw, pitch = angles[1], angles[0]
+
+        # append the computed gaze direction
         gaze_per_second[sec].append(get_direction(yaw, pitch))
 
 # ──────────────────────────────  Flask route  ──────────────────────────────────────
@@ -337,6 +404,21 @@ def analyze():
     socketio.start_background_task(process_video, temp_path)
     return {'status': 'processing started'}
 
+def emotion_by_segment(dom_emotion, segments):       # NEW
+    """Return list whose i-th element is the dominant face-emotion
+       during the i-th Whisper segment (or 'None' if no detections)."""
+    out = []
+    for seg in segments:
+        start_sec = int(seg["start"])
+        end_sec   = int(math.ceil(seg["end"]))
+        window    = list(chain.from_iterable(
+                     dom_emotion.get(s, []) for s in range(start_sec, end_sec + 1)))
+        if window:
+            out.append(Counter(window).most_common(1)[0][0])
+        else:
+            out.append("None")
+    return out
+
 # ───────────────────────────  Core processing  ────────────────────────────────────
 def process_video(temp_path):
     executor = ThreadPoolExecutor(max_workers=1)
@@ -351,6 +433,7 @@ def process_video(temp_path):
     H  = int(480)
     FPS = cap.get(cv2.CAP_PROP_FPS) or 30
     total_frames = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
+    duration_seconds = total_frames / FPS
     expected_to_process = (total_frames + 7) // 8   # every 4th frame
 
     focal  = W
@@ -452,9 +535,13 @@ def process_video(temp_path):
     dom_emotion = {s: Counter(v).most_common(1)[0][0] for s, v in class_per_second.items()}
     dom_gaze    = {s: Counter(v).most_common(1)[0][0] for s, v in gaze_per_second.items()}
     move_avg    = {s: sum(xs) / len(xs) for s, xs in movement_per_second.items()}
+    dom_shoulder= {s: Counter(v).most_common(1)[0][0] for s, v in shoulder_tilt_per_second.items()}
+    dom_hands   = {s: Counter(v).most_common(1)[0][0] for s, v in gesture_per_second.items()}
 
-    dom_shoulder = {s: Counter(v).most_common(1)[0][0] for s, v in shoulder_tilt_per_second.items()}
-    dom_hands    = {s: Counter(v).most_common(1)[0][0] for s, v in gesture_per_second.items()}
+    segments          = transcribe_future.result()
+    segment_emotions  = emotion_by_segment(class_per_second, segments)        # NEW
+    formatted_segments= "\n".join([f"[{seg['start']:.2f}s - {seg['end']:.2f}s] {seg['text']}"
+                                for seg in segments])
 
     print("Emotion class per second:"); [print(f"  Sec {s}: {c}") for s, c in dom_emotion.items()]
     print("Gaze direction per second:");  [print(f"  Sec {s}: {c}") for s, c in dom_gaze.items()]
@@ -464,15 +551,14 @@ def process_video(temp_path):
     [print(f"  Sec {s}: {dom_shoulder[s]}°") for s in sorted(dom_shoulder)]
     print(f"Gestures per second (> {FORWARD_THR}° indicates hunch):")
     [print(f"  Sec {s}: {dom_hands[s]}°") for s in sorted(dom_hands)]
-    segments = transcribe_future.result()
-    formatted_segments = "\n".join([f"[{seg['start']:.2f}s - {seg['end']:.2f}s] {seg['text']}"for seg in segments])
     print(formatted_segments)
-    feedback = get_feedback_payload(dom_emotion, dom_gaze, move_avg, dom_shoulder, dom_hands, formatted_segments)
+    feedback = get_feedback_payload(segment_emotions, dom_gaze, move_avg, dom_shoulder, dom_hands, formatted_segments)
     payload = {
         'transcriptSegments': formatted_segments,
         'speechImprovements': feedback.speechImprovements,
         'speechScore':    feedback.speechScore,
         'emotion':    dom_emotion,
+        'emotionBySegment':    segment_emotions,
         'emotionScore':    feedback.emotionScore,
         'emotionText': feedback.emotionText,
         'gaze':       dom_gaze,
@@ -483,12 +569,13 @@ def process_video(temp_path):
         'movementText': feedback.movementText,
         'shoulder': dom_shoulder,
         'shoulderScore':    feedback.shoulderScore,
-        'shoulderText': feedback.movementText,
+        'shoulderText': feedback.shoulderText,
         'gesture': dom_hands,
         'handsScore':    feedback.handsScore,
         'gestureText': feedback.gestureText,
         'overallScore': feedback.overallScore,
-        'overallSummary': feedback.overallSummary
+        'overallSummary': feedback.overallSummary,
+        'videoDuration': duration_seconds
     }
     socketio.emit('processing-complete',
                   {'message': 'Processing done!', 'progress': '100','data': payload})

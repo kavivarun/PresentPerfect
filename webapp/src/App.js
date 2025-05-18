@@ -4,6 +4,7 @@ import UploadPage from './pages/UploadPage';
 import ReportPage from './pages/ReportPage';
 import Header from './components/Header';
 import { AuthProvider } from './context/AuthContext';
+import AboutPage from './pages/AboutPage';
 
 export default function App() {
   return (
@@ -13,8 +14,7 @@ export default function App() {
     <main>
       <Routes>
         <Route path="/upload" element={<UploadPage />} />
-        <Route path="/faqs" element={<UploadPage />} />
-        <Route path="/about" element={<UploadPage />} />
+        <Route path="/about" element={<AboutPage />} />
         <Route path="/report" element={<ReportPage />} />
         <Route path="*" element={<Navigate to="/upload" replace />} />
       </Routes>

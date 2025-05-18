@@ -10,12 +10,13 @@ import {
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, ResponsiveContainer } from 'recharts';
 import { PieChart, Pie, Cell, Legend } from 'recharts';
 import { ReactComponent as Mansvg } from '../assets/mansvgrepo.svg';
-
-import { useReactToPrint } from 'react-to-print';
+import html2canvas from 'html2canvas';
+import { useAuth } from '../context/AuthContext';
 import { FaDownload } from 'react-icons/fa';
-import { useRef } from 'react';
+import { useRef , useState} from 'react';
 
-
+import { Tooltip as RTTooltip } from 'react-tooltip';
+import 'react-tooltip/dist/react-tooltip.css';
 
 export default function ReportPage() {
   const location = useLocation();
@@ -23,17 +24,40 @@ export default function ReportPage() {
 
 
   const reportData = location.state?.reportData;
-  const username = 'demo';
-  const date = "today";
+const { user } = useAuth();
+const username = user?.email?.split('@')[0] || 'Guest';
 
+const date = new Date().toLocaleDateString('en-AU', {
+  weekday: 'short',
+  year: 'numeric',
+  month: 'short',
+  day: 'numeric'
+});
+  const [isExporting, setIsExporting] = useState(false);
   const reportRef = useRef(null);
 
-  const handlePrint = useReactToPrint({
-    // NEW API — just give it the ref object
-    contentRef: reportRef,
-    copyStyles: true,
-    documentTitle: 'Performance Report',
+
+const handlePrint = async () => {
+  setIsExporting(true); // Begin export mode
+  await new Promise(resolve => setTimeout(resolve, 50)); // Wait for UI to settle
+
+  const element = reportRef.current;
+  if (!element) return;
+
+  const canvas = await html2canvas(element, {
+    scale: 1,
+    useCORS: true,
   });
+
+  const image = canvas.toDataURL('image/png');
+
+  const link = document.createElement('a');
+  link.href = image;
+  link.download = 'Performance_Report.png';
+  link.click();
+
+  setIsExporting(false); // Reset export mode
+};
 
   if (!reportData) {
     navigate('/');
@@ -53,20 +77,38 @@ export default function ReportPage() {
 
   const maxSecond = Math.max(...Object.keys(reportData.emotion).map(Number));
 
-  const emotionPerSecond = Array.from({ length: maxSecond + 1 }, (_, sec) =>
-    reportData.emotion[sec] || 'None'
-  );
+  const { emotionBySegment } = reportData;
+  const emotionPerSegment = emotionBySegment;         // NEW 1-to-1 with transcript lines
+  
+const segments = reportData.transcriptSegments
+  .split("\n")
+  .filter(Boolean)
+  .map(line => {
+    const m = line.match(/^\[(\d+\.\d+)s\s*-\s*(\d+\.\d+)s]\s*(.*)/);
+    if (!m) return null;
+    return {
+      start: parseFloat(m[1]),
+      end:   parseFloat(m[2]),
+      text:  m[3],
+    };
+  })
+  .filter(Boolean);
+
+  const totalDur = reportData.videoDuration || (segments.at(-1)?.end ?? 1);
+
 
   const emotionColors = {
     Neutral: '#cccccc',
     Happy: '#ffd700',
     Sad: '#1e90ff',
     Surprise: '#ff6347',
-    Contempt: '#8b008b',
-    Anger: '#ff4500',
-    Disgust: '#228b22',
-    None: '#ffffff'  // fallback for missing
+    Anger: '#ff0400',
   };
+  
+const emoSeg = emotionBySegment.length === segments.length
+  ? emotionBySegment
+  : Array(segments.length).fill("None");
+
 
   const gazePerSecond = Array.from({ length: maxSecond + 1 }, (_, sec) =>
     reportData.gaze[sec] || 'None'
@@ -117,7 +159,7 @@ export default function ReportPage() {
   const shoulderData = toPercentageData(shoulderPerSecond);
   const handsData = toPercentageData(handsPerSecond);
 
-  const pieColors = ['#6b4caf', '#82ca9d', '#8884d8', '#ffc658'];
+  const pieColors = ['#5D2E8C', '#E2779C'];
 
 
   const movementPerSecond = Array.from({ length: maxSecond + 1 }, (_, sec) =>
@@ -143,8 +185,8 @@ export default function ReportPage() {
   if (overallScore >= 90) rank = 'S';
   else if (overallScore >= 80) rank = 'A';
   else if (overallScore >= 70) rank = 'B';
-  else if (overallScore >= 60) rank = 'C';
-  else if (overallScore >= 50) rank = 'D';
+  else if (overallScore >= 50) rank = 'C';
+  else if (overallScore >= 30) rank = 'D';
 
   const radarData = [
     { subject: 'Emotion', A: emotionScore, fullMark: 100 },
@@ -163,7 +205,7 @@ export default function ReportPage() {
       fontFamily: '"Segoe UI", Tahoma, Geneva, Verdana, sans-serif'
     },
     reportBoxOuter: {
-      backgroundColor: '#6b4caf',
+      backgroundColor: '#5D2E8C',
       borderRadius: '20px',
       padding: '10px',
       maxWidth: '1200px',
@@ -210,7 +252,7 @@ export default function ReportPage() {
     },
     card: {
       backgroundColor: 'white',
-      color: '#6b4caf',
+      color: '#5D2E8C',
       borderRadius: '15px',
       padding: '20px',
       textAlign: 'center'
@@ -238,7 +280,7 @@ export default function ReportPage() {
     },
     summarySection: {
       backgroundColor: 'white',
-      color: '#6b4caf',
+      color: '#5D2E8C',
       borderRadius: '15px',
       padding: '20px',
       textAlign: 'start',
@@ -251,7 +293,7 @@ export default function ReportPage() {
     },
     textSection:{
       backgroundColor: 'white',
-      color: '#6b4caf',
+      color: '#5D2E8C',
       borderRadius: '15px',
       padding: '0px',
       textAlign: 'start',
@@ -269,7 +311,7 @@ export default function ReportPage() {
     },
     breakdownSection: {
       backgroundColor: 'white',
-      color: '#6b4caf',
+      color: '#5D2E8C',
       borderRadius: '15px',
       padding: '20px',
       marginTop: '20px',
@@ -333,7 +375,7 @@ export default function ReportPage() {
       marginTop: '10px',
       marginBottom: '5px',
       textAlign: 'left',
-      textDecoration: 'underline'
+      //textDecoration: 'underline'
     },
     legendContainer: {
       display: 'flex',
@@ -376,22 +418,6 @@ export default function ReportPage() {
     }
   };
 
-  function getGradientString(emotionArray, emotionColors) {
-    let stops = [];
-    const step = 100 / emotionArray.length;
-
-    for (let i = 0; i < emotionArray.length; i++) {
-      const color = emotionColors[emotionArray[i]] || '#000';
-      const percent = i * step;
-      stops.push(`${color} ${percent}%`);
-    }
-    // Add final stop at 100%
-    stops.push(`${emotionColors[emotionArray[emotionArray.length - 1]] || '#000'} 100%`);
-
-    return `linear-gradient(to right, ${stops.join(', ')})`;
-  }
-
-  const gradientString = getGradientString(emotionPerSecond, emotionColors);
 
 
   return (
@@ -405,14 +431,14 @@ export default function ReportPage() {
             <div className="report-container" style={styles.reportContainer}>
               {/* LEFT PANEL */}
               <div className="left-panel" style={styles.leftPanel}>
-                <div style={{ textAlign: 'center', marginBottom: '10px', color: '#6b4caf', fontSize: '20px', fontWeight: '600' }}>
+                <div style={{ textAlign: 'center', marginBottom: '10px', color: '#5D2E8C', fontSize: '20px', fontWeight: '600' }}>
                   Performance Radar
                 </div>
                 <RadarChart width={400} height={300} cx={200} cy={150} outerRadius={120} data={radarData}>
-                  <PolarGrid stroke="#6b4caf" />
-                  <PolarAngleAxis dataKey="subject" stroke="#6b4caf" />
+                  <PolarGrid stroke="#5D2E8C" />
+                  <PolarAngleAxis dataKey="subject" stroke="#5D2E8C" />
                   <PolarRadiusAxis angle={30} domain={[0, 100]} tick={false} axisLine={false} />
-                  <Radar name="Score" dataKey="A" stroke="#6b4caf" fill="#6b4caf" fillOpacity={0.6} isAnimationActive={true} />
+                  <Radar name="Score" dataKey="A" stroke="#5D2E8C" fill="#E2779C" fillOpacity={0.5} isAnimationActive={true} />
                   <Tooltip />
                 </RadarChart>
               </div>
@@ -445,28 +471,85 @@ export default function ReportPage() {
             <div style={styles.divider}></div>
             <h1 style={styles.title}>Speech Analysis</h1>
             {/* TRANSCRIPT & SPEECH IMPROVEMENT SECTIONS */}
-            <div style={styles.breakdownSection}>
-              <div style={styles.summaryTitle}>Transcript</div>
-              <div style={styles.textSection}>
-                {reportData.transcriptSegments
-                  .split('\n')
-                  .map((line, idx) => {
-                    // pull out “[0.00s - 6.70s]” vs the rest
-                    const m = line.match(/^\[(.*?)\]\s*(.*)/) || [];
-                    const timestamp = m[1] || line;
-                    const text = m[2] || '';
-                    return (
-                      <div key={idx} style={{ marginBottom: '1px' }}>
-                        <span style={{ color: '#6b4caf', fontWeight: 400 }}>
-                          [{timestamp}]
-                        </span>{' '}
-                        <span style={{ color: '#000', fontWeight: 200 }}>
-                          {text}
-                        </span>
+<div style={styles.breakdownSection}>
+  <div style={styles.summaryTitle}>Transcript</div>
+  <div
+    style={{
+      ...styles.textSection,
+      display:       'flex',
+      flexDirection: 'column',
+      gap:           '8px',
+      padding:       '4px 0'
+    }}
+  >
+{reportData.transcriptSegments.split('\n').map((line, idx) => {
+  const m         = line.match(/^\[(.*?)\]\s*(.*)/) || [];
+  const timestamp = m[1] || '';
+  const text      = m[2] || '';
+  const emo       = emotionPerSegment[idx] || 'None';
+  const color     = emotionColors[emo] || '#888';
+
+  return (
+    <div
+      key={idx}
+      data-tooltip-id="emo-tooltip"
+      data-tooltip-content={emo}
+      style={{
+        display:      'flex',
+        alignItems:   'flex-start',
+        padding:      '8px',
+        borderRadius: '6px',
+        background:   isExporting ? '#fff' : '#fafafa',
+        boxShadow:    isExporting ? 'none' : '0 1px 3px rgba(0,0,0,0.05)',
+        borderLeft:   `6px solid ${color}`,
+        cursor:       isExporting ? 'default' : 'pointer',
+        gap:          isExporting ? '0' : '8px'
+      }}
+    >
+      {/* Timestamp pill */}
+      <div
+        style={{
+          flexShrink:   0,
+          fontSize:     '0.75em',
+          fontWeight:   '600',
+          color:        isExporting ? '#000' : '#5D2E8C',
+          background:   isExporting ? 'none' : 'rgba(107,76,175,0.1)',
+          borderRadius: '4px',
+          padding:      '2px 6px',
+          lineHeight:   1.2,
+          marginRight:  '12px',
+          textAlign:    'center'
+        }}
+      >
+        {timestamp}
+      </div>
+
+      {/* Transcript text */}
+      <div
+        style={{
+          color:      '#333',
+          fontSize:   '0.9em',
+          lineHeight: '1.4'
+        }}
+      >
+        {text}
+      </div>
+    </div>
+  )
+})}
+
+{/* Single tooltip instance — must be outside the map */}
+<RTTooltip id="emo-tooltip" place="top" float />
+  </div>
+
+                                <div style={styles.legendContainer}>
+                    {Object.entries(emotionColors).map(([emotion, color]) => (
+                      <div key={emotion} style={styles.legendItem}>
+                        <div style={{ ...styles.legendColor, backgroundColor: color }} />
+                        <div style={styles.legendLabel}>{emotion}</div>
                       </div>
-                    );
-                  })}
-              </div>
+                    ))}
+                  </div>
             </div>
             <div style={styles.breakdownSection}>
               <div style={styles.summaryTitle}>Speech Improvement Assistance</div>
@@ -483,22 +566,82 @@ export default function ReportPage() {
                 {/* Face Emotion Analysis */}
                 <div style={styles.placeholderBox}>
                   <div style={styles.graphTitle}>Face Emotion Analysis</div>
-                  <div style={{
-                    ...styles.graphBar,
-                    background: gradientString
-                  }}>
-                    {emotionPerSecond.map((emotion, index) => (
-                      <div
-                        key={index}
-                        title={`Time: ${index}: ${emotion}`}
-                        style={{
-                          ...styles.graphBlock,
-                          backgroundColor: emotionColors[emotion] || '#000',
-                          cursor: 'pointer'
-                        }}
-                      />
-                    ))}
-                  </div>
+{/* === Face Emotion Analysis Section === */}
+<section style={{ margin: '5px 0' }}>
+  <div
+    style={{
+      ...styles.graphBar,
+      display: 'flex',
+      overflow: 'hidden',
+      borderRadius: '8px'
+    }}
+  >
+    {(() => {
+      let accumulatedWidth = 0;
+      return segments.map((seg, i) => {
+        let widthPct;
+        if (i < segments.length - 1) {
+          widthPct = ((seg.end - seg.start) / totalDur) * 100;
+          accumulatedWidth += widthPct;
+        } else {
+          widthPct = 100 - accumulatedWidth; // force last to fill
+        }
+        const emo = emoSeg[i] || 'None';
+        const timeStart = `${seg.start.toFixed(2)}s`;
+        const timeEnd = `${seg.end.toFixed(2)}s`;
+        const tipId = `tip-${i}`;
+
+        return (
+          <div
+            key={i}
+            data-tooltip-id={tipId}
+            data-tooltip-content={`${emo}: ${timeStart} – ${timeEnd}`}
+            style={{
+              width: `${widthPct}%`,
+              height: '100%',
+              backgroundColor: emotionColors[emo] || '#000',
+              display: 'flex',
+              flexDirection: 'column',
+              alignItems: 'center',
+              justifyContent: 'center',
+              padding: '4px',
+              boxSizing: 'border-box',
+              borderRight:
+                i < segments.length - 1 ? '1px solid rgba(255,255,255,0.5)' : 'none',
+              borderTopLeftRadius: i === 0 ? '8px' : '0',
+              borderBottomLeftRadius: i === 0 ? '8px' : '0',
+              borderTopRightRadius: i === segments.length - 1 ? '8px' : '0',
+              borderBottomRightRadius: i === segments.length - 1 ? '8px' : '0'
+            }}
+          >
+            <span
+              style={{
+                fontSize: '0.8em',
+                fontWeight: '600',
+                lineHeight: 1.2,
+                textAlign: 'center',
+                color: '#fff',
+                marginBottom: '2px'
+              }}
+            >
+              {emo}
+            </span>
+            <span
+              style={{
+                fontSize: '0.6em',
+                fontWeight: '400',
+                color: '#ddd'
+              }}
+            >
+            </span>
+            <RTTooltip id={tipId} place="top" />
+          </div>
+        );
+      });
+    })()}
+  </div>
+</section>
+
                   {/* Video Start / End labels */}
                   <div style={styles.barLabels}>
                     <span style={styles.barLabel}>Video Start</span>
@@ -551,7 +694,7 @@ export default function ReportPage() {
                             [`${value.toFixed(2)} (${props.payload.label})`, 'Position']
                           }
                         />
-                        <Line type="monotone" dataKey="position" stroke="#6b4caf" dot />
+                        <Line type="monotone" dataKey="position" stroke="#5D2E8C" dot />
                       </LineChart>
                     </ResponsiveContainer>
                   </div>
@@ -619,16 +762,23 @@ export default function ReportPage() {
                     margin: '20px auto'
                   }}>
                     {/* Purple human SVG background */}
-                    <Mansvg style={{
-                      position: 'absolute',
-                      width: '70%',
-                      height: '110%',
-                      fill: '#6b4caf',
-                      opacity: 1,
-                      stroke: '#6b4caf',
-                      left: '15%',
-                      top: '-5%'
-                    }} />
+<div style={{
+    position: 'absolute',
+    width: '70%',
+    height: '110%',
+    top: '50%',
+    left: '50%',
+    transform: 'translate(-50%, -50%)',
+    zIndex: 0
+  }}>
+    <Mansvg style={{
+      width: '100%',
+      height: '100%',
+      fill: '#5D2E8C',
+      opacity: 1,
+      stroke: '#5D2E8C',
+    }} />
+  </div>
 
                     {/* Heatmap grid */}
                     <div style={{
@@ -700,7 +850,7 @@ export default function ReportPage() {
       </div>
       <style>{`
 .download-button {
-  background-color: #6b4caf;
+  background-color: #5D2E8C;
   color: white;
   border: none;
   padding: 12px 24px;

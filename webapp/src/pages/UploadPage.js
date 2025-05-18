@@ -469,7 +469,7 @@ export default function UploadPage() {
             analyze your posture, gestures, and movement patterns to provide
             insightful feedback.
             <br />
-            &nbsp; &nbsp; &nbsp;Make sure your entire body is clearly visible
+            &nbsp; &nbsp; &nbsp;Make sure your entire upper body is clearly visible
             <br />
             &nbsp; &nbsp; &nbsp;Record in a well-lit environment with minimal
             background clutter

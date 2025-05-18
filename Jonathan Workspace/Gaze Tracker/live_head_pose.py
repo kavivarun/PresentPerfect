@@ -49,7 +49,7 @@ def get_direction(yaw, pitch):
     elif yaw < -YAW_THR: h = "left"
     else:                h = ""
     # vertical: "straight" zone is pitch ≥+140 or ≤-140 (wraps at 180↔-180)
-    if 180 >= pitch >= 160 or -180 <= pitch <= -160:
+    if 180 >= pitch >= 155 or -180 <= pitch <= -150:
         v = ""
     else:
         # inside the non‑straight zone → decide up/down by sign
@@ -61,7 +61,7 @@ def get_direction(yaw, pitch):
     return f"{v}-{h}"    # e.g. "up-left", "down-right"
 
 # Start video capture
-cap = cv2.VideoCapture(CAMERA_ID)
+cap = cv2.VideoCapture(0)
 ret, frame = cap.read()
 if not ret:
     raise RuntimeError("Unable to access the camera")
@@ -79,6 +79,7 @@ DIST_COEFFS = np.zeros((4,1))  # Assume no lens distortion
 
 while True:
     ret, frame = cap.read()
+    frame = cv2.resize(frame, (640, 480))
     if not ret:
         break
 
