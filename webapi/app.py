@@ -249,7 +249,7 @@ Respond with ONLY a JSON object matching the PresentationFeedback model.
 
     # Request and parse
     completion = client.beta.chat.completions.parse(
-        model="gpt-4.1",                 
+        model="gpt-4.1-nano",                 
         messages=[
             {"role": "system", "content": system},
             {"role": "user",   "content": user}
