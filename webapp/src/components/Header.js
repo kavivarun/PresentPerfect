@@ -12,7 +12,7 @@ export default function Header() {
 
   const navItems = [
     { path: '/upload', label: 'Home' },
-    { path: '/about',  label: 'About' },
+    { path: '/about', label: 'About' },
   ];
 
   const isActive = path => location.pathname === path;

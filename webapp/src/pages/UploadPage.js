@@ -12,9 +12,6 @@ import { useAuth } from '../context/AuthContext';
 export default function UploadPage() {
   const navigate = useNavigate();
 
-  /* ------------------------------------------------------------------ */
-  /*  STATE  */
-  /* ------------------------------------------------------------------ */
   const [toast, setToast] = useState(null);
   const [toastVisible, setToastVisible] = useState(false);
 
@@ -34,9 +31,6 @@ export default function UploadPage() {
   const [passwordInput, setPasswordInput] = useState('');
   const [loginError, setLoginError] = useState('');
 
-  /* ------------------------------------------------------------------ */
-  /*  SOCKET‑IO SUBSCRIPTION  */
-  /* ------------------------------------------------------------------ */
   useEffect(() => {
     socketRef.current = io('http://localhost:4000');
 
@@ -61,18 +55,14 @@ export default function UploadPage() {
     return () => socketRef.current.disconnect();
   }, [navigate, user, reportData]);
 
-  /* ------------------------------------------------------------------ */
-  /*  NAVIGATE AFTER LOGIN  */
-  /* ------------------------------------------------------------------ */
+
   useEffect(() => {
     if (user && pendingNavigate && reportData) {
       navigate('/report', { state: { reportData } });
     }
   }, [user, pendingNavigate, reportData, navigate]);
 
-  /* ------------------------------------------------------------------ */
-  /*  TOAST  */
-  /* ------------------------------------------------------------------ */
+
   const showToast = message => {
     setToast(message);
     setToastVisible(true);
@@ -82,9 +72,7 @@ export default function UploadPage() {
     }, 3000);
   };
 
-  /* ------------------------------------------------------------------ */
-  /*  INLINE LOGIN HANDLER  */
-  /* ------------------------------------------------------------------ */
+
   const handleInlineLogin = e => {
     e.preventDefault();
     if (login(emailInput, passwordInput)) {
@@ -94,9 +82,7 @@ export default function UploadPage() {
     }
   };
 
-  /* ------------------------------------------------------------------ */
-  /*  DROPZONE  */
-  /* ------------------------------------------------------------------ */
+
   const onDrop = useCallback(async (acceptedFiles, fileRejections) => {
     if (fileRejections.length) {
       showToast('Please upload a valid .mp4 video file.');
@@ -136,9 +122,7 @@ export default function UploadPage() {
     noKeyboard: true
   });
 
-  /* ------------------------------------------------------------------ */
-  /*  STYLES  */
-  /* ------------------------------------------------------------------ */
+
   const styles = {
     /* page */
     page: {
@@ -230,14 +214,14 @@ export default function UploadPage() {
       overflow: 'hidden'
     },
     progressBar: {
-        height: '100%',
-        borderRadius: '999px',
-        backgroundImage: 'repeating-linear-gradient(135deg, #B288C0 0 20px, #ffffff 10px 30px)',
-        backgroundSize: '40px 40px',
-        backgroundPosition: '0 0',
-        animation: 'candy 1s linear infinite',
-        transition: 'width 1s ease-out',
-      },
+      height: '100%',
+      borderRadius: '999px',
+      backgroundImage: 'repeating-linear-gradient(135deg, #B288C0 0 20px, #ffffff 10px 30px)',
+      backgroundSize: '40px 40px',
+      backgroundPosition: '0 0',
+      animation: 'candy 1s linear infinite',
+      transition: 'width 1s ease-out',
+    },
     progressPercent: {
       marginTop: '0.5rem',
       fontVariantNumeric: 'tabular-nums'
@@ -323,7 +307,7 @@ export default function UploadPage() {
       width: '95.5%',
       height: '79%',
       backgroundColor: 'rgba(255, 255, 255, 0.29)',
-      borderRadius: '1.5rem',  // match the upload box corners
+      borderRadius: '1.5rem',
       display: 'flex',
       alignItems: 'center',
       justifyContent: 'center',
@@ -336,7 +320,7 @@ export default function UploadPage() {
       borderRadius: '1.25rem',
       boxShadow: '0 4px 12px rgba(0,0,0,0.2)',
       width: '100%',
-      height:'90%',
+      height: '90%',
       maxWidth: '350px',
       textAlign: 'left',
     },
@@ -376,9 +360,6 @@ export default function UploadPage() {
     }
   };
 
-  /* ------------------------------------------------------------------ */
-  /*  RENDER  */
-  /* ------------------------------------------------------------------ */
   const activeProgress = uploading ? uploadProgress : processingProgress;
   const activeMessage = uploading ? 'Uploading video…' : processingMsg;
 
@@ -424,39 +405,39 @@ export default function UploadPage() {
 
         {/* INLINE LOGIN PROMPT */}
         {pendingNavigate && !user && (
-  <div style={styles.loginOverlay}>
-    <div style={styles.loginCard}>
-      <h2 style={styles.loginTitle}>Please log in to see your analysis</h2>
-      {loginError && <div style={styles.loginError}>{loginError}</div>}
-      <form onSubmit={handleInlineLogin}>
-        <input
-          type="email"
-          placeholder="Email"
-          value={emailInput}
-          onChange={e => setEmailInput(e.target.value)}
-          style={styles.loginInput}
-          required
-        />
-        <input
-          type="password"
-          placeholder="Password"
-          value={passwordInput}
-          onChange={e => setPasswordInput(e.target.value)}
-          style={styles.loginInput}
-          required
-        />
-        <button
-          type="submit"
-          style={styles.loginButton}
-          onMouseOver={e => (e.currentTarget.style.backgroundColor = styles.loginButtonHover.backgroundColor)}
-          onMouseOut={e => (e.currentTarget.style.backgroundColor = styles.loginButton.backgroundColor)}
-        >
-          Log In
-        </button>
-      </form>
-    </div>
-  </div>
-)}
+          <div style={styles.loginOverlay}>
+            <div style={styles.loginCard}>
+              <h2 style={styles.loginTitle}>Please log in to see your analysis</h2>
+              {loginError && <div style={styles.loginError}>{loginError}</div>}
+              <form onSubmit={handleInlineLogin}>
+                <input
+                  type="email"
+                  placeholder="Email"
+                  value={emailInput}
+                  onChange={e => setEmailInput(e.target.value)}
+                  style={styles.loginInput}
+                  required
+                />
+                <input
+                  type="password"
+                  placeholder="Password"
+                  value={passwordInput}
+                  onChange={e => setPasswordInput(e.target.value)}
+                  style={styles.loginInput}
+                  required
+                />
+                <button
+                  type="submit"
+                  style={styles.loginButton}
+                  onMouseOver={e => (e.currentTarget.style.backgroundColor = styles.loginButtonHover.backgroundColor)}
+                  onMouseOut={e => (e.currentTarget.style.backgroundColor = styles.loginButton.backgroundColor)}
+                >
+                  Log In
+                </button>
+              </form>
+            </div>
+          </div>
+        )}
       </div>
 
       {/* info section */}
@@ -484,13 +465,13 @@ export default function UploadPage() {
           {['Real-time posture analysis to correct body language issues like slouching',
             'Confidence feedback by detecting emotion, movement and stance',
             'Practice smarter — get actionable insights instantly for real presentations'].map((text, i) => (
-            <div key={i} style={styles.checkItem}>
-              <span style={styles.checkIcon}>
-                <CheckBox style={{ width: '1.5rem', height: '1.5rem', fill: '#5D2E8C' }} />
-              </span>
-              <span>{text}</span>
-            </div>
-          ))}
+              <div key={i} style={styles.checkItem}>
+                <span style={styles.checkIcon}>
+                  <CheckBox style={{ width: '1.5rem', height: '1.5rem', fill: '#5D2E8C' }} />
+                </span>
+                <span>{text}</span>
+              </div>
+            ))}
         </div>
       </div>
 

@@ -27,12 +27,12 @@ from itertools import chain
 torch.backends.cudnn.benchmark = True
 DEVICE = "cuda:0"
 load_dotenv()  
-# ──────────────────────────────  Flask / Socket.IO  ────────────────────────────────
+#Flask / Socket.IO  
 app = Flask(__name__)
 CORS(app)
 socketio = SocketIO(app, cors_allowed_origins="*", async_mode='eventlet')
 
-# ───────────────────────────────  Models & Consts  ─────────────────────────────────
+#Models & Consts  
 MODEL_PATH   = os.getenv("MODEL_PATH")
 emotion_model = YOLO(MODEL_PATH)
 
@@ -109,9 +109,9 @@ GESTURE_RATIO          = 0.22
 
 BATCH              = 1
 NUM_WORKERS        = os.cpu_count()
-QUEUE_SIZE         = BATCH * 32          # pending frames waiting for batching
+QUEUE_SIZE         = BATCH * 32        
 
-# ───────────────────────────────  Per-request State  ───────────────────────────────
+#Per-request State  
 frame_index          = 0
 class_per_second     = defaultdict(list)
 gaze_per_second      = defaultdict(list)
@@ -145,7 +145,7 @@ FUN_MESSAGES = [
     "Analyzing stage presence... charisma.exe launching 🚀"
 ]
 
-# ─────────────────────  Utility helpers  ───────────────────────────────────────────
+# Utility helpers  
 def reset_state():
     global frame_index, processed_frames
     with state_lock:
@@ -183,7 +183,7 @@ def get_direction(yaw, pitch):
         return v
     return f"{v}-{h}"
 
-# ─────────────────────  LLM CALL  ────────────────────────────
+#LLM CALL
 def get_feedback_payload(
     dom_emotion,
     dom_gaze:    Dict[int, str],
@@ -249,7 +249,7 @@ Respond with ONLY a JSON object matching the PresentationFeedback model.
 
     # Request and parse
     completion = client.beta.chat.completions.parse(
-        model="gpt-4.1-nano",                 
+        model="gpt-4.1",                 
         messages=[
             {"role": "system", "content": system},
             {"role": "user",   "content": user}
@@ -261,7 +261,7 @@ Respond with ONLY a JSON object matching the PresentationFeedback model.
     feedback: PresentationFeedback = completion.choices[0].message.parsed
     return feedback
 
-# ─────────────────────  Batch-aware detector functions  ────────────────────────────
+#Batch-aware detector functions
 def emotion_batch(batch_frames, W, H, batch_secs):
     heads, sec_idx = [], []
     for i, frame in enumerate(batch_frames):
@@ -324,7 +324,7 @@ def movement_batch(batch_rgbs, batch_secs):
         bin_idx = int(min(10, math.floor(mid_x * 10) + 1))
         movement_per_second[sec].append(bin_idx)
 
-        # ── SHOULDER STATE  (straight vs tilted) ───────────────────────
+        #SHOULDER STATE  (straight vs tilted)
         p1 = np.array([l_sh.x, l_sh.y])
         p2 = np.array([r_sh.x, r_sh.y])
         dx, dy   = (p2 - p1)
@@ -334,7 +334,7 @@ def movement_batch(batch_rgbs, batch_secs):
         label_shoulder = "Shoulders Straight" if abs(angle_deg) <= STRAIGHT_THRESHOLD_DEG else "Shoulders Tilted"
         shoulder_tilt_per_second[sec].append(label_shoulder)
 
-        # ── HAND STATE  (gesturing vs at-side) ─────────────────────────
+        #HAND STATE  (gesturing vs at-side)
         l_wr = lm[mp_pose.PoseLandmark.LEFT_WRIST.value]
         r_wr = lm[mp_pose.PoseLandmark.RIGHT_WRIST.value]
         hip_mid_x = (l_hp.x + r_hp.x) / 2.0
@@ -389,7 +389,7 @@ def gaze_batch(batch_rgbs, batch_secs, CAM_MAT, DIST, W, H):
         # append the computed gaze direction
         gaze_per_second[sec].append(get_direction(yaw, pitch))
 
-# ──────────────────────────────  Flask route  ──────────────────────────────────────
+#Flask route 
 @app.route('/api/analyze', methods=['POST'])
 def analyze():
     reset_state()
@@ -419,7 +419,7 @@ def emotion_by_segment(dom_emotion, segments):       # NEW
             out.append("None")
     return out
 
-# ───────────────────────────  Core processing  ────────────────────────────────────
+#Core processing 
 def process_video(temp_path):
     executor = ThreadPoolExecutor(max_workers=1)
     transcribe_future = executor.submit(
@@ -434,7 +434,7 @@ def process_video(temp_path):
     FPS = cap.get(cv2.CAP_PROP_FPS) or 30
     total_frames = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
     duration_seconds = total_frames / FPS
-    expected_to_process = (total_frames + 7) // 8   # every 4th frame
+    expected_to_process = (total_frames + 7) // 8   # every 8th frame
 
     focal  = W
     center = (W / 2, H / 2)
@@ -451,7 +451,7 @@ def process_video(temp_path):
     last_msg_time  = time.time()
     current_msg    = random.choice(FUN_MESSAGES)
 
-    # Producer – reads frames and pushes every 4th into queue
+    # Producer – reads frames and pushes every 8th into queue
     def reader():
         global frame_index
         idx = 0
@@ -470,14 +470,14 @@ def process_video(temp_path):
 
             idx += 1
             with state_lock:
-                frame_index += 1   # still useful if you log raw read progress
+                frame_index += 1  
 
             # fun message throttling
             new_msg, last_msg_time = get_random_message(last_msg_time, 5)
             if new_msg:
                 current_msg = new_msg
 
-            time.sleep(0)  # yield
+            time.sleep(0)
     threading.Thread(target=reader, daemon=True).start()
 
     # Consumer – pulls frames, builds batches, runs detectors
@@ -531,7 +531,7 @@ def process_video(temp_path):
     for t in workers:
         t.join()
 
-    # ── Aggregation / final emit ───────────────────────────────────
+    # ── Aggregation / final emit
     dom_emotion = {s: Counter(v).most_common(1)[0][0] for s, v in class_per_second.items()}
     dom_gaze    = {s: Counter(v).most_common(1)[0][0] for s, v in gaze_per_second.items()}
     move_avg    = {s: sum(xs) / len(xs) for s, xs in movement_per_second.items()}
@@ -580,6 +580,6 @@ def process_video(temp_path):
     socketio.emit('processing-complete',
                   {'message': 'Processing done!', 'progress': '100','data': payload})
 
-# ───────────────────────────────  Main  ───────────────────────────────────────────
+
 if __name__ == '__main__':
     socketio.run(app, host='0.0.0.0', port=4000, debug=True)

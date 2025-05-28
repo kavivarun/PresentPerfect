@@ -69,7 +69,7 @@ export default function AboutPage() {
       color: '#555',
       lineHeight: '1',
     },
-        triangleBg: {
+    triangleBg: {
       position: 'fixed',
       top: '40%',
       right: 0,
@@ -84,9 +84,9 @@ export default function AboutPage() {
   };
 
   const team = [
-    { img: kaviImg,   name: 'Kavi Sathyamurthy',   role: 'Developer', bio: 'More than half my friends think I am a Vampire' },
-    { img: saloniImg, name: 'Saloni Samant',       role: 'Developer', bio: 'Neutralizes the 0.01% germs sanitizers cannot' },
-    { img: jonathanImg,name: 'Jonathan Sjamsudin', role: 'Developer', bio: 'Professional Yapper, Part-Time Data Analyst' },
+    { img: kaviImg, name: 'Kavi Sathyamurthy', role: 'Developer', bio: 'More than half my friends think I am a Vampire' },
+    { img: saloniImg, name: 'Saloni Samant', role: 'Developer', bio: 'Neutralizes the 0.01% germs sanitizers cannot' },
+    { img: jonathanImg, name: 'Jonathan Sjamsudin', role: 'Developer', bio: 'Professional Yapper, Part-Time Data Analyst' },
   ];
 
   return (
@@ -121,7 +121,7 @@ export default function AboutPage() {
         </div>
       </div>
 
-            <div style={styles.triangleBg} />
+      <div style={styles.triangleBg} />
 
       <style>{`
         body, html { margin: 0; padding: 0; overflow: auto; }

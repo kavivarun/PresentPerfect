@@ -13,7 +13,7 @@ import { ReactComponent as Mansvg } from '../assets/mansvgrepo.svg';
 import html2canvas from 'html2canvas';
 import { useAuth } from '../context/AuthContext';
 import { FaDownload } from 'react-icons/fa';
-import { useRef , useState} from 'react';
+import { useRef, useState } from 'react';
 
 import { Tooltip as RTTooltip } from 'react-tooltip';
 import 'react-tooltip/dist/react-tooltip.css';
@@ -24,40 +24,40 @@ export default function ReportPage() {
 
 
   const reportData = location.state?.reportData;
-const { user } = useAuth();
-const username = user?.email?.split('@')[0] || 'Guest';
+  const { user } = useAuth();
+  const username = user?.email?.split('@')[0] || 'Guest';
 
-const date = new Date().toLocaleDateString('en-AU', {
-  weekday: 'short',
-  year: 'numeric',
-  month: 'short',
-  day: 'numeric'
-});
+  const date = new Date().toLocaleDateString('en-AU', {
+    weekday: 'short',
+    year: 'numeric',
+    month: 'short',
+    day: 'numeric'
+  });
   const [isExporting, setIsExporting] = useState(false);
   const reportRef = useRef(null);
 
 
-const handlePrint = async () => {
-  setIsExporting(true); // Begin export mode
-  await new Promise(resolve => setTimeout(resolve, 50)); // Wait for UI to settle
+  const handlePrint = async () => {
+    setIsExporting(true); // Begin export mode
+    await new Promise(resolve => setTimeout(resolve, 50));
 
-  const element = reportRef.current;
-  if (!element) return;
+    const element = reportRef.current;
+    if (!element) return;
 
-  const canvas = await html2canvas(element, {
-    scale: 1,
-    useCORS: true,
-  });
+    const canvas = await html2canvas(element, {
+      scale: 1,
+      useCORS: true,
+    });
 
-  const image = canvas.toDataURL('image/png');
+    const image = canvas.toDataURL('image/png');
 
-  const link = document.createElement('a');
-  link.href = image;
-  link.download = 'Performance_Report.png';
-  link.click();
+    const link = document.createElement('a');
+    link.href = image;
+    link.download = 'Performance_Report.png';
+    link.click();
 
-  setIsExporting(false); // Reset export mode
-};
+    setIsExporting(false);
+  };
 
   if (!reportData) {
     navigate('/');
@@ -78,21 +78,21 @@ const handlePrint = async () => {
   const maxSecond = Math.max(...Object.keys(reportData.emotion).map(Number));
 
   const { emotionBySegment } = reportData;
-  const emotionPerSegment = emotionBySegment;         // NEW 1-to-1 with transcript lines
-  
-const segments = reportData.transcriptSegments
-  .split("\n")
-  .filter(Boolean)
-  .map(line => {
-    const m = line.match(/^\[(\d+\.\d+)s\s*-\s*(\d+\.\d+)s]\s*(.*)/);
-    if (!m) return null;
-    return {
-      start: parseFloat(m[1]),
-      end:   parseFloat(m[2]),
-      text:  m[3],
-    };
-  })
-  .filter(Boolean);
+  const emotionPerSegment = emotionBySegment;
+
+  const segments = reportData.transcriptSegments
+    .split("\n")
+    .filter(Boolean)
+    .map(line => {
+      const m = line.match(/^\[(\d+\.\d+)s\s*-\s*(\d+\.\d+)s]\s*(.*)/);
+      if (!m) return null;
+      return {
+        start: parseFloat(m[1]),
+        end: parseFloat(m[2]),
+        text: m[3],
+      };
+    })
+    .filter(Boolean);
 
   const totalDur = reportData.videoDuration || (segments.at(-1)?.end ?? 1);
 
@@ -104,10 +104,10 @@ const segments = reportData.transcriptSegments
     Surprise: '#ff6347',
     Anger: '#ff0400',
   };
-  
-const emoSeg = emotionBySegment.length === segments.length
-  ? emotionBySegment
-  : Array(segments.length).fill("None");
+
+  const emoSeg = emotionBySegment.length === segments.length
+    ? emotionBySegment
+    : Array(segments.length).fill("None");
 
 
   const gazePerSecond = Array.from({ length: maxSecond + 1 }, (_, sec) =>
@@ -121,7 +121,7 @@ const emoSeg = emotionBySegment.length === segments.length
   const total = gazePerSecond.length;
   const getHeatColor = (percent) => {
     const baseAlpha = 0.1;
-    const extraAlpha = Math.min(0.7, percent / 100); // stronger purple as percentage increases
+    const extraAlpha = Math.min(0.7, percent / 100);
     return `rgba(107, 76, 175, ${baseAlpha + extraAlpha})`;
   };
   const gazePercentages = {
@@ -152,7 +152,7 @@ const emoSeg = emotionBySegment.length === segments.length
     const total = arr.length;
     return Object.entries(counts).map(([name, count]) => ({
       name,
-      value: Number(((count / total) * 100).toFixed(1)) // ensure it's a number
+      value: Number(((count / total) * 100).toFixed(1))
     }));
   };
 
@@ -291,7 +291,7 @@ const emoSeg = emotionBySegment.length === segments.length
       wordWrap: 'break-word',
       overflowWrap: 'break-word'
     },
-    textSection:{
+    textSection: {
       backgroundColor: 'white',
       color: '#5D2E8C',
       borderRadius: '15px',
@@ -351,18 +351,18 @@ const emoSeg = emotionBySegment.length === segments.length
     },
     graphBar: {
       display: 'flex',
-      width: '100%', // or '100%' or any fixed width you want
-      height: '60px', // match block height
+      width: '100%',
+      height: '60px',
       overflow: 'hidden',
       borderRadius: '10px'
     },
     graphBlockContainer: {
-      margin: '0', // remove margin between blocks
+      margin: '0',
       padding: '0'
     },
     graphBlock: {
       flex: '1',
-      height: '60px', // taller bar
+      height: '60px',
       transition: 'background-color 0.3s ease'
     },
     graphBlockLabel: {
@@ -375,7 +375,6 @@ const emoSeg = emotionBySegment.length === segments.length
       marginTop: '10px',
       marginBottom: '5px',
       textAlign: 'left',
-      //textDecoration: 'underline'
     },
     legendContainer: {
       display: 'flex',
@@ -471,85 +470,85 @@ const emoSeg = emotionBySegment.length === segments.length
             <div style={styles.divider}></div>
             <h1 style={styles.title}>Speech Analysis</h1>
             {/* TRANSCRIPT & SPEECH IMPROVEMENT SECTIONS */}
-<div style={styles.breakdownSection}>
-  <div style={styles.summaryTitle}>Transcript</div>
-  <div
-    style={{
-      ...styles.textSection,
-      display:       'flex',
-      flexDirection: 'column',
-      gap:           '8px',
-      padding:       '4px 0'
-    }}
-  >
-{reportData.transcriptSegments.split('\n').map((line, idx) => {
-  const m         = line.match(/^\[(.*?)\]\s*(.*)/) || [];
-  const timestamp = m[1] || '';
-  const text      = m[2] || '';
-  const emo       = emotionPerSegment[idx] || 'None';
-  const color     = emotionColors[emo] || '#888';
+            <div style={styles.breakdownSection}>
+              <div style={styles.summaryTitle}>Transcript</div>
+              <div
+                style={{
+                  ...styles.textSection,
+                  display: 'flex',
+                  flexDirection: 'column',
+                  gap: '8px',
+                  padding: '4px 0'
+                }}
+              >
+                {reportData.transcriptSegments.split('\n').map((line, idx) => {
+                  const m = line.match(/^\[(.*?)\]\s*(.*)/) || [];
+                  const timestamp = m[1] || '';
+                  const text = m[2] || '';
+                  const emo = emotionPerSegment[idx] || 'None';
+                  const color = emotionColors[emo] || '#888';
 
-  return (
-    <div
-      key={idx}
-      data-tooltip-id="emo-tooltip"
-      data-tooltip-content={emo}
-      style={{
-        display:      'flex',
-        alignItems:   'flex-start',
-        padding:      '8px',
-        borderRadius: '6px',
-        background:   isExporting ? '#fff' : '#fafafa',
-        boxShadow:    isExporting ? 'none' : '0 1px 3px rgba(0,0,0,0.05)',
-        borderLeft:   `6px solid ${color}`,
-        cursor:       isExporting ? 'default' : 'pointer',
-        gap:          isExporting ? '0' : '8px'
-      }}
-    >
-      {/* Timestamp pill */}
-      <div
-        style={{
-          flexShrink:   0,
-          fontSize:     '0.75em',
-          fontWeight:   '600',
-          color:        isExporting ? '#000' : '#5D2E8C',
-          background:   isExporting ? 'none' : 'rgba(107,76,175,0.1)',
-          borderRadius: '4px',
-          padding:      '2px 6px',
-          lineHeight:   1.2,
-          marginRight:  '12px',
-          textAlign:    'center'
-        }}
-      >
-        {timestamp}
-      </div>
-
-      {/* Transcript text */}
-      <div
-        style={{
-          color:      '#333',
-          fontSize:   '0.9em',
-          lineHeight: '1.4'
-        }}
-      >
-        {text}
-      </div>
-    </div>
-  )
-})}
-
-{/* Single tooltip instance — must be outside the map */}
-<RTTooltip id="emo-tooltip" place="top" float />
-  </div>
-
-                                <div style={styles.legendContainer}>
-                    {Object.entries(emotionColors).map(([emotion, color]) => (
-                      <div key={emotion} style={styles.legendItem}>
-                        <div style={{ ...styles.legendColor, backgroundColor: color }} />
-                        <div style={styles.legendLabel}>{emotion}</div>
+                  return (
+                    <div
+                      key={idx}
+                      data-tooltip-id="emo-tooltip"
+                      data-tooltip-content={emo}
+                      style={{
+                        display: 'flex',
+                        alignItems: 'flex-start',
+                        padding: '8px',
+                        borderRadius: '6px',
+                        background: isExporting ? '#fff' : '#fafafa',
+                        boxShadow: isExporting ? 'none' : '0 1px 3px rgba(0,0,0,0.05)',
+                        borderLeft: `6px solid ${color}`,
+                        cursor: isExporting ? 'default' : 'pointer',
+                        gap: isExporting ? '0' : '8px'
+                      }}
+                    >
+                      {/* Timestamp pill */}
+                      <div
+                        style={{
+                          flexShrink: 0,
+                          fontSize: '0.75em',
+                          fontWeight: '600',
+                          color: isExporting ? '#000' : '#5D2E8C',
+                          background: isExporting ? 'none' : 'rgba(107,76,175,0.1)',
+                          borderRadius: '4px',
+                          padding: '2px 6px',
+                          lineHeight: 1.2,
+                          marginRight: '12px',
+                          textAlign: 'center'
+                        }}
+                      >
+                        {timestamp}
                       </div>
-                    ))}
+
+                      {/* Transcript text */}
+                      <div
+                        style={{
+                          color: '#333',
+                          fontSize: '0.9em',
+                          lineHeight: '1.4'
+                        }}
+                      >
+                        {text}
+                      </div>
+                    </div>
+                  )
+                })}
+
+                {/* Single tooltip instance — must be outside the map */}
+                <RTTooltip id="emo-tooltip" place="top" float />
+              </div>
+
+              <div style={styles.legendContainer}>
+                {Object.entries(emotionColors).map(([emotion, color]) => (
+                  <div key={emotion} style={styles.legendItem}>
+                    <div style={{ ...styles.legendColor, backgroundColor: color }} />
+                    <div style={styles.legendLabel}>{emotion}</div>
                   </div>
+                ))}
+              </div>
             </div>
             <div style={styles.breakdownSection}>
               <div style={styles.summaryTitle}>Speech Improvement Assistance</div>
@@ -566,81 +565,81 @@ const emoSeg = emotionBySegment.length === segments.length
                 {/* Face Emotion Analysis */}
                 <div style={styles.placeholderBox}>
                   <div style={styles.graphTitle}>Face Emotion Analysis</div>
-{/* === Face Emotion Analysis Section === */}
-<section style={{ margin: '5px 0' }}>
-  <div
-    style={{
-      ...styles.graphBar,
-      display: 'flex',
-      overflow: 'hidden',
-      borderRadius: '8px'
-    }}
-  >
-    {(() => {
-      let accumulatedWidth = 0;
-      return segments.map((seg, i) => {
-        let widthPct;
-        if (i < segments.length - 1) {
-          widthPct = ((seg.end - seg.start) / totalDur) * 100;
-          accumulatedWidth += widthPct;
-        } else {
-          widthPct = 100 - accumulatedWidth; // force last to fill
-        }
-        const emo = emoSeg[i] || 'None';
-        const timeStart = `${seg.start.toFixed(2)}s`;
-        const timeEnd = `${seg.end.toFixed(2)}s`;
-        const tipId = `tip-${i}`;
+                  {/* Face Emotion Analysis Section */}
+                  <section style={{ margin: '5px 0' }}>
+                    <div
+                      style={{
+                        ...styles.graphBar,
+                        display: 'flex',
+                        overflow: 'hidden',
+                        borderRadius: '8px'
+                      }}
+                    >
+                      {(() => {
+                        let accumulatedWidth = 0;
+                        return segments.map((seg, i) => {
+                          let widthPct;
+                          if (i < segments.length - 1) {
+                            widthPct = ((seg.end - seg.start) / totalDur) * 100;
+                            accumulatedWidth += widthPct;
+                          } else {
+                            widthPct = 100 - accumulatedWidth;
+                          }
+                          const emo = emoSeg[i] || 'None';
+                          const timeStart = `${seg.start.toFixed(2)}s`;
+                          const timeEnd = `${seg.end.toFixed(2)}s`;
+                          const tipId = `tip-${i}`;
 
-        return (
-          <div
-            key={i}
-            data-tooltip-id={tipId}
-            data-tooltip-content={`${emo}: ${timeStart} – ${timeEnd}`}
-            style={{
-              width: `${widthPct}%`,
-              height: '100%',
-              backgroundColor: emotionColors[emo] || '#000',
-              display: 'flex',
-              flexDirection: 'column',
-              alignItems: 'center',
-              justifyContent: 'center',
-              padding: '4px',
-              boxSizing: 'border-box',
-              borderRight:
-                i < segments.length - 1 ? '1px solid rgba(255,255,255,0.5)' : 'none',
-              borderTopLeftRadius: i === 0 ? '8px' : '0',
-              borderBottomLeftRadius: i === 0 ? '8px' : '0',
-              borderTopRightRadius: i === segments.length - 1 ? '8px' : '0',
-              borderBottomRightRadius: i === segments.length - 1 ? '8px' : '0'
-            }}
-          >
-            <span
-              style={{
-                fontSize: '0.8em',
-                fontWeight: '600',
-                lineHeight: 1.2,
-                textAlign: 'center',
-                color: '#fff',
-                marginBottom: '2px'
-              }}
-            >
-              {emo}
-            </span>
-            <span
-              style={{
-                fontSize: '0.6em',
-                fontWeight: '400',
-                color: '#ddd'
-              }}
-            >
-            </span>
-            <RTTooltip id={tipId} place="top" />
-          </div>
-        );
-      });
-    })()}
-  </div>
-</section>
+                          return (
+                            <div
+                              key={i}
+                              data-tooltip-id={tipId}
+                              data-tooltip-content={`${emo}: ${timeStart} – ${timeEnd}`}
+                              style={{
+                                width: `${widthPct}%`,
+                                height: '100%',
+                                backgroundColor: emotionColors[emo] || '#000',
+                                display: 'flex',
+                                flexDirection: 'column',
+                                alignItems: 'center',
+                                justifyContent: 'center',
+                                padding: '4px',
+                                boxSizing: 'border-box',
+                                borderRight:
+                                  i < segments.length - 1 ? '1px solid rgba(255,255,255,0.5)' : 'none',
+                                borderTopLeftRadius: i === 0 ? '8px' : '0',
+                                borderBottomLeftRadius: i === 0 ? '8px' : '0',
+                                borderTopRightRadius: i === segments.length - 1 ? '8px' : '0',
+                                borderBottomRightRadius: i === segments.length - 1 ? '8px' : '0'
+                              }}
+                            >
+                              <span
+                                style={{
+                                  fontSize: '0.8em',
+                                  fontWeight: '600',
+                                  lineHeight: 1.2,
+                                  textAlign: 'center',
+                                  color: '#fff',
+                                  marginBottom: '2px'
+                                }}
+                              >
+                                {emo}
+                              </span>
+                              <span
+                                style={{
+                                  fontSize: '0.6em',
+                                  fontWeight: '400',
+                                  color: '#ddd'
+                                }}
+                              >
+                              </span>
+                              <RTTooltip id={tipId} place="top" />
+                            </div>
+                          );
+                        });
+                      })()}
+                    </div>
+                  </section>
 
                   {/* Video Start / End labels */}
                   <div style={styles.barLabels}>
@@ -661,7 +660,7 @@ const emoSeg = emotionBySegment.length === segments.length
                   <div style={styles.suggestionText}>{reportData.emotionText}</div>
                 </div>
 
-                {/* Placeholder Graph 2 */}
+                {/* Graph 2 */}
                 <div style={styles.placeholderBox}>
                   <div style={styles.graphTitle}>Movement Analysis</div>
                   <div style={{ width: '100%', height: 300 }}>
@@ -752,7 +751,7 @@ const emoSeg = emotionBySegment.length === segments.length
                   </div>
 
                 </div>
-                {/* Placeholder Graph 3 */}
+                {/* Graph 3 */}
                 <div style={styles.placeholderBox}>
                   <div style={styles.graphTitle}>Gaze Analysis</div>
                   <div style={{
@@ -761,24 +760,24 @@ const emoSeg = emotionBySegment.length === segments.length
                     height: '300px',
                     margin: '20px auto'
                   }}>
-                    {/* Purple human SVG background */}
-<div style={{
-    position: 'absolute',
-    width: '70%',
-    height: '110%',
-    top: '50%',
-    left: '50%',
-    transform: 'translate(-50%, -50%)',
-    zIndex: 0
-  }}>
-    <Mansvg style={{
-      width: '100%',
-      height: '100%',
-      fill: '#5D2E8C',
-      opacity: 1,
-      stroke: '#5D2E8C',
-    }} />
-  </div>
+                    {/* SVG background */}
+                    <div style={{
+                      position: 'absolute',
+                      width: '70%',
+                      height: '110%',
+                      top: '50%',
+                      left: '50%',
+                      transform: 'translate(-50%, -50%)',
+                      zIndex: 0
+                    }}>
+                      <Mansvg style={{
+                        width: '100%',
+                        height: '100%',
+                        fill: '#5D2E8C',
+                        opacity: 1,
+                        stroke: '#5D2E8C',
+                      }} />
+                    </div>
 
                     {/* Heatmap grid */}
                     <div style={{
