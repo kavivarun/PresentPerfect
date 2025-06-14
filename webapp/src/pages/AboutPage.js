@@ -3,6 +3,7 @@ import React from 'react';
 import kaviImg from '../assets/Kavi.jpg';
 import saloniImg from '../assets/Saloni.jpg';
 import jonathanImg from '../assets/Jonathan.jpg';
+import adityaImg from '../assets/aditya.jpg';
 
 export default function AboutPage() {
   const styles = {
@@ -32,9 +33,9 @@ export default function AboutPage() {
     },
     teamGrid: {
       display: 'grid',
-      gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))',
+      gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))',
       gap: '1rem',
-      maxWidth: '1200px',
+      maxWidth: '1300px',
       width: '100%',
     },
     card: {
@@ -83,11 +84,12 @@ export default function AboutPage() {
     },
   };
 
-  const team = [
-    { img: kaviImg, name: 'Kavi Sathyamurthy', role: 'Developer', bio: 'More than half my friends think I am a Vampire' },
-    { img: saloniImg, name: 'Saloni Samant', role: 'Developer', bio: 'Neutralizes the 0.01% germs sanitizers cannot' },
-    { img: jonathanImg, name: 'Jonathan Sjamsudin', role: 'Developer', bio: 'Professional Yapper, Part-Time Data Analyst' },
-  ];
+const team = [
+  { img: kaviImg, name: 'Kavi Sathyamurthy', role: 'Developer', bio: 'More than half my friends think I am a Vampire' },
+  { img: saloniImg, name: 'Saloni Samant', role: 'Developer', bio: 'Neutralizes the 0.01% germs sanitizers cannot' },
+  { img: jonathanImg, name: 'Jonathan Sjamsudin', role: 'Developer', bio: 'Professional Yapper, Part-Time Data Analyst' },
+  { img: adityaImg, name: 'Aditya Maniar', role: 'Developer', bio: 'my brain is less “gray matter” and more “internet soup.”' },
+];
 
   return (
     <>
