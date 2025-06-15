@@ -30,7 +30,8 @@ import numpy as np
 
 torch.backends.cudnn.benchmark = True
 # DEVICE = "cuda:0"
-DEVICE = "cpu"
+DEVICE = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
+
 load_dotenv()  
 #Flask / Socket.IO  
 app = Flask(__name__)
