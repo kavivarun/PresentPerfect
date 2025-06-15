@@ -24,12 +24,22 @@ export default function UploadPage() {
   const [uploading, setUploading] = useState(false);
   const [uploadProgress, setUploadProgress] = useState(0);
   const [reportData, setReportData] = useState(null);
+  const [uploadedFileType, setUploadedFileType] = useState(null); // Track file type
 
   const { user, login } = useAuth();
   const [pendingNavigate, setPendingNavigate] = useState(false);
   const [emailInput, setEmailInput] = useState('');
   const [passwordInput, setPasswordInput] = useState('');
   const [loginError, setLoginError] = useState('');
+
+  // Memoized navigation function
+  const navigateToReport = useCallback((data) => {
+    if (data?.type === 'audio' || uploadedFileType === 'audio') {
+      navigate('/audio-report', { state: { reportData: data } });
+    } else {
+      navigate('/report', { state: { reportData: data } });
+    }
+  }, [navigate, uploadedFileType]);
 
   useEffect(() => {
     socketRef.current = io('http://localhost:4000');
@@ -41,27 +51,33 @@ export default function UploadPage() {
 
     socketRef.current.on('processing-complete', data => {
       setProcessingProgress(100);
-      console.log(data)
+      console.log(data);
       setProcessingMsg(data.message);
       setReportData(data.data);
       setProcessing(false);
       if (user) {
-        navigate('/report', { state: { reportData: data.data } });
+        navigateToReport(data.data);
       } else {
         setPendingNavigate(true);
       }
     });
 
-    return () => socketRef.current.disconnect();
-  }, [navigate, user, reportData]);
+    socketRef.current.on('processing-error', data => {
+      console.error('Processing error:', data);
+      setProcessing(false);
+      setUploading(false);
+      showToast(data.error || 'Processing failed');
+    });
 
+    return () => socketRef.current.disconnect();
+  }, [navigate, user, navigateToReport]);
 
   useEffect(() => {
     if (user && pendingNavigate && reportData) {
-      navigate('/report', { state: { reportData } });
+      navigateToReport(reportData);
+      setPendingNavigate(false);
     }
-  }, [user, pendingNavigate, reportData, navigate]);
-
+  }, [user, pendingNavigate, reportData, navigateToReport]);
 
   const showToast = message => {
     setToast(message);
@@ -72,7 +88,6 @@ export default function UploadPage() {
     }, 3000);
   };
 
-
   const handleInlineLogin = e => {
     e.preventDefault();
     if (login(emailInput, passwordInput)) {
@@ -82,46 +97,83 @@ export default function UploadPage() {
     }
   };
 
-
   const onDrop = useCallback(async (acceptedFiles, fileRejections) => {
     if (fileRejections.length) {
-      showToast('Please upload a valid .mp4 video file.');
+      showToast('Please upload a valid video (.mp4) or audio (.mp3, .wav) file.');
       return;
     }
     if (!acceptedFiles.length) return;
 
     const file = acceptedFiles[0];
     const formData = new FormData();
-    formData.append('video', file);
+    const fileType = file.type;
+
+    // Reset states
+    setUploading(true);
+    setProcessing(false);
+    setUploadProgress(0);
+    setProcessingProgress(0);
+    setProcessingMsg('');
+    setReportData(null);
+    setPendingNavigate(false);
 
     try {
-      setUploading(true);
-      await axios.post('http://localhost:4000/api/analyze', formData, {
-        headers: { 'Content-Type': 'multipart/form-data' },
-        onUploadProgress: evt => {
-          const pct = Math.round((evt.loaded / evt.total) * 100);
-          setUploadProgress(pct);
-        }
-      });
+      // Determine file type and set up the request
+      if (fileType.startsWith('video/')) {
+        setUploadedFileType('video');
+        formData.append('video', file);
+        
+        await axios.post('http://localhost:4000/api/analyze', formData, {
+          headers: { 'Content-Type': 'multipart/form-data' },
+          onUploadProgress: evt => {
+            const pct = Math.round((evt.loaded / evt.total) * 100);
+            setUploadProgress(pct);
+          }
+        });
+      } else if (fileType.startsWith('audio/')) {
+        setUploadedFileType('audio');
+        formData.append('audio', file);
+        
+        await axios.post('http://localhost:4000/api/analyze-audio', formData, {
+          headers: { 'Content-Type': 'multipart/form-data' },
+          onUploadProgress: evt => {
+            const pct = Math.round((evt.loaded / evt.total) * 100);
+            setUploadProgress(pct);
+          }
+        });
+      } else {
+        throw new Error('Unsupported file type. Please upload .mp4, .mp3, or .wav files.');
+      }
+
       setUploading(false);
       setProcessing(true);
       setProcessingProgress(0);
       setProcessingMsg('Starting analysis…');
     } catch (err) {
       console.error(err);
-      showToast('Upload failed');
+      let errorMessage = 'Upload failed';
+      if (err.response?.data?.error) {
+        errorMessage = err.response.data.error;
+      } else if (err.message) {
+        errorMessage = err.message;
+      }
+      showToast(errorMessage);
       setUploading(false);
+      setUploadedFileType(null);
     }
   }, []);
 
   const { getRootProps, getInputProps, isDragActive, open } = useDropzone({
     onDrop,
-    accept: { 'video/mp4': [] },
+    accept: { 
+      'video/mp4': ['.mp4'],
+      'audio/mpeg': ['.mp3'],
+      'audio/wav': ['.wav']
+    },
     multiple: false,
     noClick: true,
     noKeyboard: true
   });
-
 
   const styles = {
     /* page */
@@ -361,7 +413,9 @@ export default function UploadPage() {
   };
 
   const activeProgress = uploading ? uploadProgress : processingProgress;
-  const activeMessage = uploading ? 'Uploading video…' : processingMsg;
+  const activeMessage = uploading 
+    ? `Uploading ${uploadedFileType === 'audio' ? 'audio file' : 'video'}…` 
+    : processingMsg;
 
   return (
     <div style={styles.page}>
@@ -380,7 +434,7 @@ export default function UploadPage() {
           </div>
         )}
 
-        {processing && (
+        {(uploading || processing) && (
           <div style={styles.progressOverlay}>
             <p style={styles.progressMessage}>{activeMessage}</p>
             <div style={styles.progressWrapper}>
@@ -395,10 +449,10 @@ export default function UploadPage() {
             <div style={styles.icon}>
               <UploadIcon style={{ width: '8rem', height: '8rem', stroke: '#f9f9ff' }} />
             </div>
-            <div>Drag and drop your video to upload</div>
+            <div>Drag and drop your video or audio file to upload</div>
             <button type="button" onClick={open} style={styles.uploadButton}>
               <UploadFile style={{ width: '1.5rem', height: '1.5rem', stroke: '#000' }} />
-              Choose Video
+              Choose File
             </button>
           </div>
         )}
@@ -445,15 +499,24 @@ export default function UploadPage() {
         <div style={styles.instructions}>
           <h2>Instructions</h2>
           <p>
-            Nervous about speaking in front of a crowd? Don’t worry — we’ve got your
-            back. Simply upload a short video of yourself speaking. Our AI will
-            analyze your posture, gestures, and movement patterns to provide
-            insightful feedback.
+            Nervous about speaking in front of a crowd? Don't worry — we've got your
+            back. Simply upload a short video or audio recording of yourself speaking. 
+            Our AI will analyze your delivery to provide insightful feedback.
+            <br />
+            <br />
+            <strong>For Videos (.mp4):</strong>
             <br />
             &nbsp; &nbsp; &nbsp;Make sure your entire upper body is clearly visible
             <br />
-            &nbsp; &nbsp; &nbsp;Record in a well-lit environment with minimal
-            background clutter
+            &nbsp; &nbsp; &nbsp;Record in a well-lit environment with minimal background clutter
+            <br />
+            <br />
+            <strong>For Audio (.mp3, .wav):</strong>
+            <br />
+            &nbsp; &nbsp; &nbsp;Ensure clear recording quality for best speech analysis
+            <br />
+            &nbsp; &nbsp; &nbsp;Speak naturally as you would in a real presentation
+            <br />
             <br />
             Once submitted, your results will appear with suggestions to help
             improve your delivery.
@@ -462,16 +525,19 @@ export default function UploadPage() {
 
         <div style={styles.checklist}>
           <h2>Why use PresentPerfect?</h2>
-          {['Real-time posture analysis to correct body language issues like slouching',
-            'Confidence feedback by detecting emotion, movement and stance',
-            'Practice smarter — get actionable insights instantly for real presentations'].map((text, i) => (
-              <div key={i} style={styles.checkItem}>
-                <span style={styles.checkIcon}>
-                  <CheckBox style={{ width: '1.5rem', height: '1.5rem', fill: '#5D2E8C' }} />
-                </span>
-                <span>{text}</span>
-              </div>
-            ))}
+          {[
+            'Real-time posture analysis to correct body language issues like slouching',
+            'Confidence feedback by detecting emotion, movement and stance', 
+            'AI-enhanced speech generation for audio uploads',
+            'Practice smarter — get actionable insights instantly for real presentations'
+          ].map((text, i) => (
+            <div key={i} style={styles.checkItem}>
+              <span style={styles.checkIcon}>
+                <CheckBox style={{ width: '1.5rem', height: '1.5rem', fill: '#5D2E8C' }} />
+              </span>
+              <span>{text}</span>
+            </div>
+          ))}
         </div>
       </div>
 
@@ -483,3 +549,4 @@ export default function UploadPage() {
     </div>
   );
 }
+

@@ -2,7 +2,8 @@
 import eventlet
 eventlet.monkey_patch()
 
-from flask import Flask, request
+from flask import Flask, request, send_from_directory, jsonify
+from pathlib import Path
 from flask_socketio import SocketIO
 from flask_cors import CORS
 
@@ -22,18 +23,39 @@ from typing import Dict, List, Any
 from pydantic import BaseModel
 from openai import AzureOpenAI, OpenAI
 
-from itertools import chain                          
+from itertools import chain         
+import librosa
+import numpy as np       
+
 
 torch.backends.cudnn.benchmark = True
-DEVICE = "cuda:0"
+# DEVICE = "cuda:0"
+DEVICE = "cpu"
 load_dotenv()  
 #Flask / Socket.IO  
 app = Flask(__name__)
 CORS(app)
-socketio = SocketIO(app, cors_allowed_origins="*", async_mode='eventlet')
+socketio = SocketIO(app, cors_allowed_origins="*", async_mode='eventlet', ping_timeout=120, ping_interval=25 )
+
+STATIC_AUDIO_DIR = os.path.join(os.getcwd(), 'static', 'generated_audio')
+os.makedirs(STATIC_AUDIO_DIR, exist_ok=True)
+print(f"[INFO] Static audio directory: {STATIC_AUDIO_DIR}")
+print(f"[INFO] Directory exists: {os.path.exists(STATIC_AUDIO_DIR)}")
+
+# Import and initialize global audio processor
+try:
+    from enhanced_audio_processor import EnhancedAudioProcessor, process_audio_for_presentation
+    enhanced_audio_processor = EnhancedAudioProcessor()
+    print("[INFO] Enhanced audio processor initialized successfully")
+except ImportError as e:
+    print(f"[ERROR] Failed to import enhanced audio processor: {e}")
+    enhanced_audio_processor = None
+except Exception as e:
+    print(f"[ERROR] Failed to initialize enhanced audio processor: {e}")
+    enhanced_audio_processor = None
 
 #Models & Consts  
-MODEL_PATH   = os.getenv("MODEL_PATH")
+MODEL_PATH   = os.getenv("MODEL_PATH") or "yolov8n.pt"
 emotion_model = YOLO(MODEL_PATH)
 
 whisper_model = whisper.load_model("turbo", device=DEVICE) 
@@ -249,7 +271,7 @@ Respond with ONLY a JSON object matching the PresentationFeedback model.
 
     # Request and parse
     completion = client.beta.chat.completions.parse(
-        model="gpt-4.1",                 
+        model="gpt-4.1-nano-2025-04-14",                 
         messages=[
             {"role": "system", "content": system},
             {"role": "user",   "content": user}
@@ -394,6 +416,8 @@ def gaze_batch(batch_rgbs, batch_secs, CAM_MAT, DIST, W, H):
 def analyze():
     reset_state()
     video = request.files['video']
+    print(f"Request:{request}")
+    print(f"[INFO] Received video: {video.filename} ({video.content_length / 1024:.2f} KB)")
     if not video:
         return {'error': 'No video uploaded'}, 400
 
@@ -580,6 +604,108 @@ def process_video(temp_path):
     socketio.emit('processing-complete',
                   {'message': 'Processing done!', 'progress': '100','data': payload})
 
+
+@app.route('/api/analyze-audio', methods=['POST'])
+def analyze_audio():
+    try:
+        reset_state()
+        
+        if 'audio' not in request.files:
+            return {'error': 'No audio file found in request'}, 400
+            
+        audio = request.files['audio']
+        
+        if audio.filename == '':
+            return {'error': 'No audio file selected'}, 400
+            
+        print(f"[INFO] Received audio: {audio.filename}")
+        
+        # Create unique temporary path with timestamp
+        timestamp = int(time.time())
+        filename_base = os.path.splitext(audio.filename)[0]
+        temp_filename = f"{filename_base}_{timestamp}.tmp"
+        temp_path = os.path.join(tempfile.gettempdir(), temp_filename)
+        
+        audio.save(temp_path)
+        
+        if not os.path.exists(temp_path):
+            return {'error': 'Failed to save audio file'}, 500
+            
+        actual_size = os.path.getsize(temp_path)
+        print(f"[INFO] Audio saved: {actual_size / 1024:.2f} KB")
+        
+        if actual_size == 0:
+            return {'error': 'Audio file is empty'}, 400
+
+        # Check if enhanced audio processor is available
+        if enhanced_audio_processor is None:
+            return {'error': 'Audio processor not available. Check server configuration.'}, 500
+
+        # Use enhanced audio processing
+        socketio.start_background_task(process_audio_for_presentation, temp_path, enhanced_audio_processor, socketio)
+        return {'status': 'audio processing started'}
+
+    except Exception as e:
+        print(f"[ERROR] analyze_audio endpoint failed: {e}")
+        import traceback
+        traceback.print_exc()
+        return {'error': str(e)}, 500
+
+@app.route('/static/generated_audio/<filename>')
+def serve_generated_audio(filename):
+    """Serve generated audio files with proper headers and debugging"""
+    try:
+        # Use absolute path to be sure
+        audio_dir = os.path.join(os.getcwd(), 'static', 'generated_audio')
+        file_path = os.path.join(audio_dir, filename)
+        
+        print(f"[DEBUG] Looking for audio file: {file_path}")
+        print(f"[DEBUG] File exists: {os.path.exists(file_path)}")
+        
+        if not os.path.exists(file_path):
+            # List all files in the directory for debugging
+            if os.path.exists(audio_dir):
+                files = os.listdir(audio_dir)
+                print(f"[DEBUG] Files in audio directory: {files}")
+            else:
+                print(f"[DEBUG] Audio directory doesn't exist: {audio_dir}")
+            
+            return jsonify({'error': 'Audio file not found'}), 404
+        
+        return send_from_directory(
+            audio_dir,
+            filename,
+            as_attachment=False,
+            mimetype='audio/mpeg'
+        )
+        
+    except Exception as e:
+        print(f"[ERROR] Failed to serve audio file {filename}: {e}")
+        import traceback
+        traceback.print_exc()
+        return jsonify({'error': 'Audio file serving failed'}), 404
+
+@app.route('/api/health')
+def health_check():
+    return {'status': 'ok', 'audio_processor': enhanced_audio_processor is not None}
+
+
+@app.route('/api/debug/audio-files')
+def debug_audio_files():
+    """Debug endpoint to see what audio files exist"""
+    try:
+        audio_dir = os.path.join(os.getcwd(), 'static', 'generated_audio')
+        if os.path.exists(audio_dir):
+            files = os.listdir(audio_dir)
+            return jsonify({
+                'directory': audio_dir,
+                'files': files,
+                'count': len(files)
+            })
+        else:
+            return jsonify({'error': 'Audio directory not found', 'directory': audio_dir})
+    except Exception as e:
+        return jsonify({'error': str(e)})
 
 if __name__ == '__main__':
     socketio.run(app, host='0.0.0.0', port=4000, debug=True)
